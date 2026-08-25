@@ -1,0 +1,88 @@
+# =========================================================
+# Visual Studio
+# =========================================================
+
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Visual Studio build directories
+Debug/
+Release/
+x64/
+x86/
+
+# =========================================================
+# CMake
+# =========================================================
+
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# CMake generated files
+CTestTestfile.cmake
+Makefile
+
+# =========================================================
+# Compiled binaries
+# =========================================================
+
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# =========================================================
+# Generated build/dependency files
+# =========================================================
+
+_external/
+_deps/
+
+# =========================================================
+# Tracy
+# =========================================================
+
+*.tracy
+
+# =========================================================
+# Experimental Results
+# =========================================================
+
+# Ignore generated benchmark results
+results/raw/
+
+# Keep the directory itself
+!results/raw/.gitkeep
+
+# =========================================================
+# OS files
+# =========================================================
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# =========================================================
+# Temporary files
+# =========================================================
+
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.swo
