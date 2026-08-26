@@ -86,3 +86,6 @@ Desktop.ini
 *.bak
 *.swp
 *.swo
+
+# Git commit message
+commit-message.txt

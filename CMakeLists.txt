@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(
     Multithreaded-Visibility-Determination-Experimental-Framework
     VERSION 1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # C++ Standard
@@ -43,10 +43,31 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Tracy)
 
+# GLAD
+FetchContent_Declare(
+    glad
+    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
+    GIT_TAG v2.0.8
+    SOURCE_SUBDIR cmake
+)
+FetchContent_MakeAvailable(glad)
+
+glad_add_library(
+    glad_gl
+    STATIC
+    REPRODUCIBLE
+    LOADER
+    API gl:core=4.6
+)
+
 # Source files
 set(
     SOURCES
+
     src/main.cpp
+
+    src/Application/Application.h
+    src/Application/Application.cpp
 )
 
 # Executable
@@ -59,34 +80,59 @@ add_executable(
 target_include_directories(
     Multithreaded-Visibility-Determination-Experimental-Framework
     PRIVATE
+
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+
+        ${CMAKE_CURRENT_BINARY_DIR}/gladsources/glad_gl/include
 )
+
+# Libraries
 target_link_libraries(
     Multithreaded-Visibility-Determination-Experimental-Framework
     PRIVATE
+
         SDL3::SDL3
         glm::glm
+        glad_gl
 )
 
 # Tracy
 target_compile_definitions(
     Multithreaded-Visibility-Determination-Experimental-Framework
     PRIVATE
+
         TRACY_ENABLE
 )
+
 target_link_libraries(
     Multithreaded-Visibility-Determination-Experimental-Framework
     PRIVATE
+
         TracyClient
 )
 
+# Copy SDL3 runtime DLL
+if(WIN32)
+    add_custom_command(
+        TARGET Multithreaded-Visibility-Determination-Experimental-Framework
+        POST_BUILD
+
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+
+            "$<TARGET_FILE:SDL3::SDL3>"
+
+            "$<TARGET_FILE_DIR:Multithreaded-Visibility-Determination-Experimental-Framework>"
+    )
+endif()
+
 # Windows configuration
 if(WIN32)
+
     target_compile_definitions(
         Multithreaded-Visibility-Determination-Experimental-Framework
         PRIVATE
+
             WIN32_LEAN_AND_MEAN
             NOMINMAX
     )
-
 endif()
