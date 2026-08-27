@@ -68,6 +68,8 @@ set(
 
     src/Application/Application.h
     src/Application/Application.cpp
+    src/Rendering/Shader.cpp
+    src/Rendering/Shader.cpp
 )
 
 # Executable
@@ -118,12 +120,20 @@ if(WIN32)
         POST_BUILD
 
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-
             "$<TARGET_FILE:SDL3::SDL3>"
-
             "$<TARGET_FILE_DIR:Multithreaded-Visibility-Determination-Experimental-Framework>"
     )
 endif()
+
+# Copy Shaders
+add_custom_command(
+    TARGET Multithreaded-Visibility-Determination-Experimental-Framework
+    POST_BUILD
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/shaders"
+        "$<TARGET_FILE_DIR:Multithreaded-Visibility-Determination-Experimental-Framework>/shaders"
+)    
 
 # Windows configuration
 if(WIN32)

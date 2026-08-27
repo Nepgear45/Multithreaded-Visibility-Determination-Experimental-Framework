@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include "Rendering/Shader.h"
+
 class Application
 {
 public:
@@ -17,9 +19,13 @@ private:
     void Update();
     void Render();
 
-private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_glContext = nullptr;
+
+    GLuint m_triangleVAO = 0;
+    GLuint m_triangleVBO = 0;
+
+    Shader m_triangleShader;
 
     bool m_running = false;
 
