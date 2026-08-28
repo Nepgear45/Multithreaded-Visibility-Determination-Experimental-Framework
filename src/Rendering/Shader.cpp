@@ -1,5 +1,7 @@
 #include "Shader.h"
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -180,4 +182,10 @@ bool Shader::LoadFromFiles(const std::string& vertexPath, const std::string& fra
 void Shader::Bind() const
 {
     glUseProgram(m_programID);
+}
+
+void Shader::SetMat4(const std::string& name, const glm::mat4& matrix) const
+{
+    const GLint location = glGetUniformLocation(m_programID, name.c_str());
+    glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
 }

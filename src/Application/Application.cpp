@@ -1,14 +1,13 @@
 #include "Application.h"
 
 #include <glad/gl.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-#include <windows.h>
+#include "System/CPUInfo.h"
 
-#include <cstdlib>
 #include <iostream>
 #include <thread>
-#include <vector>
-#include <unordered_set>
 #include <string>
 
 Application::Application()
@@ -19,91 +18,6 @@ Application::Application()
 Application::~Application()
 {
     Shutdown();
-}
-
-static void PrintCPUInformation()
-{
-    // CPU Retail Name
-    std::string retailName = "Unknown";
-    HKEY key;
-
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &key) == ERROR_SUCCESS)
-    {
-        char buffer[256]{};
-        DWORD bufferSize = sizeof(buffer);
-
-        if (RegQueryValueExA(key, "ProcessorNameString", nullptr, nullptr, reinterpret_cast<LPBYTE>(buffer), &bufferSize) == ERROR_SUCCESS)
-        {
-            retailName = buffer;
-        }
-
-        RegCloseKey(key);
-    }
-
-    // CPU Model
-    const char* cpuModel = std::getenv("PROCESSOR_IDENTIFIER");
-
-    // CPU Topology
-    DWORD length = 0;
-
-    GetSystemCpuSetInformation
-    (
-        nullptr,
-        0,
-        &length,
-        GetCurrentProcess(),
-        0
-    );
-
-    std::vector<unsigned char> cpuBuffer(length);
-
-    if (!GetSystemCpuSetInformation(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(cpuBuffer.data()), length, &length, GetCurrentProcess(), 0))
-    {
-        std::cerr << "Failed to retrieve CPU information.\n";
-        return;
-    }
-
-    std::unordered_set<ULONG> physicalCores;
-    std::unordered_set<ULONG> performanceCores;
-    std::unordered_set<ULONG> efficiencyCores;
-
-    DWORD offset = 0;
-
-    while (offset < length)
-    {
-        auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(cpuBuffer.data() + offset);
-
-        if (info->Type == CpuSetInformation)
-        {
-            const auto& cpu = info->CpuSet;
-
-            physicalCores.insert(cpu.CoreIndex);
-
-            // Note
-            // EfficiencyClass 0 represents the
-            // highest-performance core class.
-
-            if (cpu.EfficiencyClass == 0)
-            {
-                efficiencyCores.insert(cpu.CoreIndex);
-            }
-            else
-            {
-                performanceCores.insert(cpu.CoreIndex);
-            }
-        }
-
-        offset += info->Size;
-    }
-
-    // Output
-    std::cout << "\n--- CPU Information ---\n";
-    std::cout << "Retail Name: " << retailName << '\n';
-    std::cout << "Model: " << (cpuModel != nullptr ? cpuModel : "Unknown") << '\n';
-    std::cout << "Physical Cores: " << physicalCores.size() << '\n';
-    std::cout << "Performance Cores (P-Cores): " << performanceCores.size() << '\n';
-    std::cout << "Efficiency Cores (E-Cores): " << efficiencyCores.size() << '\n';
-    std::cout << "Logical Processors: " << std::thread::hardware_concurrency() << '\n';
 }
 
 bool Application::Initialise()
@@ -193,7 +107,7 @@ bool Application::Initialise()
     }
 
     // Display CPU Information
-    PrintCPUInformation();
+    CPUInfo::Print();
 
     // Display OpenGL Information
     std::cout << "\n--- OpenGL Information ---\n";
@@ -204,6 +118,9 @@ bool Application::Initialise()
     std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << '\n';
     std::cout << "OpenGL " << GLAD_VERSION_MAJOR(version) << "." << GLAD_VERSION_MINOR(version) << " loaded successfully." << '\n';
 
+    // Enable Depth test
+    glEnable(GL_DEPTH_TEST);
+
     // Configure Viewport
     glViewport
     (
@@ -213,19 +130,69 @@ bool Application::Initialise()
         m_windowHeight
     );
 
-    // Load Triangle Shader
+    // Load Cube Shader (keeping old names becuase they will be replaced again anyway)
     if (!m_triangleShader.LoadFromFiles("shaders/triangle.vert", "shaders/triangle.frag"))
     {
         std::cerr << "Failed to load triangle shader." << '\n';
         return false;
     }
 
-    // Triangle Geometry
+    // Cube Geometry
     const float vertices[] =
     {
-         0.0f,  0.5f, 0.0f,
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f
+        // Back face
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+
+        // Front face
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
+
+        // Left face
+        -0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+
+        // Right face
+         0.5f,  0.5f,  0.5f,
+         0.5f,  0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+
+         0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+
+         // Bottom face
+         -0.5f, -0.5f, -0.5f,
+          0.5f, -0.5f, -0.5f,
+          0.5f, -0.5f,  0.5f,
+
+          0.5f, -0.5f,  0.5f,
+         -0.5f, -0.5f,  0.5f,
+         -0.5f, -0.5f, -0.5f,
+
+         // Top face
+         -0.5f,  0.5f, -0.5f,
+          0.5f,  0.5f, -0.5f,
+          0.5f,  0.5f,  0.5f,
+
+          0.5f,  0.5f,  0.5f,
+         -0.5f,  0.5f,  0.5f,
+         -0.5f,  0.5f, -0.5f
     };
 
     // Create VAO / VBO
@@ -326,7 +293,6 @@ void Application::Update()
 
 void Application::Render()
 {
-    // Clear
     glClearColor
     (
         0.1f,
@@ -335,33 +301,71 @@ void Application::Render()
         1.0f
     );
 
-    glClear
-    (
-        GL_COLOR_BUFFER_BIT
-    );
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Draw Triangle
+    // Bind Shader
     m_triangleShader.Bind();
 
-    glBindVertexArray
+    // Model Matrix
+    glm::mat4 model = glm::mat4(1.0f);
+
+    model = glm::rotate
+        (
+            model,
+            glm::radians(25.0f),
+            glm::vec3(1.0f, 0.5f, 0.0f)
+        );
+
+    // View Matrix
+    glm::mat4 view = glm::lookAt
+        (
+            glm::vec3(0.0f, 0.0f, 3.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+    // Projection Matrix
+    const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+
+    glm::mat4 projection = glm::perspective
+        (
+            glm::radians(60.0f),
+            aspectRatio,
+            0.1f,
+            100.0f
+        );
+
+    // Send Matrices to Shader
+    m_triangleShader.SetMat4
     (
-        m_triangleVAO
+        "uModel",
+        model
     );
 
+    m_triangleShader.SetMat4
+    (
+        "uView",
+        view
+    );
+
+    m_triangleShader.SetMat4
+    (
+        "uProjection",
+        projection
+    );
+
+    // Draw Cube
+    glBindVertexArray(m_triangleVAO);
     glDrawArrays
     (
         GL_TRIANGLES,
         0,
-        3
+        36
     );
-
     glBindVertexArray(0);
 
     // Present Frame
-    SDL_GL_SwapWindow
-    (
-        m_window
-    );
+    SDL_GL_SwapWindow(m_window);
 }
 
 void Application::Shutdown()

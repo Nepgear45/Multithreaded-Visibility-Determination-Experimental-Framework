@@ -66,10 +66,13 @@ set(
 
     src/main.cpp
 
+    src/System/CPUInfo.h
+    src/System/CPUInfo.cpp
+
     src/Application/Application.h
     src/Application/Application.cpp
     src/Rendering/Shader.cpp
-    src/Rendering/Shader.cpp
+    src/Rendering/Shader.cpp    
 )
 
 # Executable
@@ -137,7 +140,6 @@ add_custom_command(
 
 # Windows configuration
 if(WIN32)
-
     target_compile_definitions(
         Multithreaded-Visibility-Determination-Experimental-Framework
         PRIVATE
