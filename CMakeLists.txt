@@ -83,6 +83,8 @@ set(
 
     src/Visibility/SingleThreadedCuller.h
     src/Visibility/SingleThreadedCuller.cpp
+    src/Visibility/MultithreadedCuller.h
+    src/Visibility/MultithreadedCuller.cpp
 
     src/Application/Application.h
     src/Application/Application.cpp

@@ -386,11 +386,21 @@ void Application::Render()
 
     // Test every scene object against the frustum using the single-threaded culler
     // Visible objects are stored inside m_visibleObjects
+    /*
     m_singleThreadedCuller.Cull
     (
         m_scene.GetObjects(),
         frustum,
         m_visibleObjects
+    );
+    */
+
+    m_multithreadedCuller.Cull
+    (
+        m_scene.GetObjects(),
+        frustum,
+        m_visibleObjects,
+        4
     );
 
     // Get the number of objects that passed the culling test

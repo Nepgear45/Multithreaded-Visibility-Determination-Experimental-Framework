@@ -8,6 +8,7 @@
 #include "Camera/Camera.h"
 #include "Scene/Scene.h"
 #include "Visibility/SingleThreadedCuller.h"
+#include "Visibility/MultithreadedCuller.h"
 
 enum class CameraMode {Static, Freecam};
 
@@ -45,6 +46,7 @@ private:
     Shader m_triangleShader;
 
     SingleThreadedCuller m_singleThreadedCuller;
+    MultithreadedCuller m_multithreadedCuller;
     std::vector<const SceneObject*> m_visibleObjects;
 
     bool m_running = false;
