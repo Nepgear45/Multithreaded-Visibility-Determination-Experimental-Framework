@@ -256,6 +256,9 @@ bool Application::Initialise()
         std::cerr << "Warning: VSync could not be enabled: " << SDL_GetError() << '\n';
     }
 
+    // Disable mouse hitting the edge of the window
+    SDL_SetWindowRelativeMouseMode(m_window, true);
+
     // Application State
     m_running = true;
     std::cout << '\n' << "Application initialised successfully." << '\n';
@@ -265,8 +268,15 @@ bool Application::Initialise()
 
 void Application::Run()
 {
+    m_lastFrameTime = SDL_GetPerformanceCounter();
+
     while (m_running)
     {
+        const Uint64 currentFrameTime = SDL_GetPerformanceCounter();
+
+        m_deltaTime = static_cast<float>(currentFrameTime - m_lastFrameTime) / static_cast<float>( SDL_GetPerformanceFrequency());
+        m_lastFrameTime = currentFrameTime;
+
         ProcessEvents();
         Update();
         Render();
@@ -283,12 +293,60 @@ void Application::ProcessEvents()
         {
             m_running = false;
         }
+
+        if (event.type == SDL_EVENT_MOUSE_MOTION)
+        {
+            if (m_cameraMode == CameraMode::Freecam)
+            {
+                const float xOffset = event.motion.xrel;
+                const float yOffset = -event.motion.yrel;
+
+                m_camera.ProcessMouseMovement(xOffset, yOffset);
+            }
+        }
+
+        if (event.type == SDL_EVENT_KEY_DOWN)
+        {
+            if (event.key.scancode == SDL_SCANCODE_F1)
+            {
+                if (m_cameraMode == CameraMode::Freecam)
+                {
+                    m_cameraMode = CameraMode::Static;
+                    SDL_SetWindowRelativeMouseMode(m_window, false);
+                    std::cout << "Camera Mode: Static\n";
+                }
+                else
+                {
+                    m_cameraMode = CameraMode::Freecam;
+                    SDL_SetWindowRelativeMouseMode( m_window, true);
+                    std::cout << "Camera Mode: Freecam\n";
+                }
+            }
+        }
     }
 }
 
 void Application::Update()
 {
+    if (m_cameraMode != CameraMode::Freecam) return;
 
+    const bool* keyboardState = SDL_GetKeyboardState(nullptr);
+
+    if (keyboardState[SDL_SCANCODE_W]) m_camera.ProcessKeyboard(CameraMovement::Forward, m_deltaTime);
+    if (keyboardState[SDL_SCANCODE_S]) m_camera.ProcessKeyboard(CameraMovement::Backward, m_deltaTime);
+    if (keyboardState[SDL_SCANCODE_A]) m_camera.ProcessKeyboard(CameraMovement::Left, m_deltaTime);
+    if (keyboardState[SDL_SCANCODE_D]) m_camera.ProcessKeyboard(CameraMovement::Right, m_deltaTime);
+    if (keyboardState[SDL_SCANCODE_SPACE]) m_camera.ProcessKeyboard(CameraMovement::Up, m_deltaTime);
+    if (keyboardState[SDL_SCANCODE_LCTRL]) m_camera.ProcessKeyboard(CameraMovement::Down, m_deltaTime);
+
+    /*
+        W       forward
+        S       backward
+        A       left
+        D       right
+        Space   up
+        Ctrl    down
+    */
 }
 
 void Application::Render()
@@ -317,12 +375,7 @@ void Application::Render()
         );
 
     // View Matrix
-    glm::mat4 view = glm::lookAt
-        (
-            glm::vec3(0.0f, 0.0f, 3.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
+    const glm::mat4 view = m_camera.GetViewMatrix();
 
     // Projection Matrix
     const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);

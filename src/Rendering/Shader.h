@@ -25,6 +25,5 @@ private:
     static std::string ReadFile(const std::string& path);
     static GLuint CompileShader(GLenum type, const std::string& source);
 
-private:
     GLuint m_programID = 0;
 };

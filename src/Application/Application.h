@@ -3,6 +3,9 @@
 #include <SDL3/SDL.h>
 
 #include "Rendering/Shader.h"
+#include "Camera/Camera.h"
+
+enum class CameraMode {Static, Freecam};
 
 class Application
 {
@@ -13,6 +16,14 @@ public:
     bool Initialise();
     void Run();
     void Shutdown();
+
+    // Camera Variables
+    Camera m_camera;
+
+    CameraMode m_cameraMode = CameraMode::Freecam;
+
+    float m_deltaTime = 0.0f;
+    Uint64 m_lastFrameTime = 0;
 
 private:
     void ProcessEvents();

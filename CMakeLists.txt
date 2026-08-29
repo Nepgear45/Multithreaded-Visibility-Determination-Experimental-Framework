@@ -69,6 +69,9 @@ set(
     src/System/CPUInfo.h
     src/System/CPUInfo.cpp
 
+    src/Camera/Camera.h
+    src/Camera/Camera.cpp
+
     src/Application/Application.h
     src/Application/Application.cpp
     src/Rendering/Shader.cpp
