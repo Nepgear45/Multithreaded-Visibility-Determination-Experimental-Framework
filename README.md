@@ -28,6 +28,7 @@ The framework is being developed as part of a research project comparing single-
 | `Left Ctrl` | Move down                                      |
 | `Mouse`     | Rotate / look around                           |
 | `F1`        | Toggle between Freecam and Static camera modes |
+| `F2`        | Cycle culling configuration                    |
 
 ### Freecam Mode
 Freecam allows the camera to move freely through the rendered scene using the keyboard and mouse.
@@ -40,6 +41,25 @@ Static mode disables Freecam movement and mouse rotation.
 Press `F1` to switch between Static and Freecam modes.
 Static mode will be used for benchamrking.
 
+### Performance Monitoring
+
+The framework includes a Dear ImGui performance overlay for monitoring the visibility determination system during development.
+Press `F2` to cycle between culling configuration.
+
+The overlay displays:
+* Camera mode
+* Total scene object count
+* Visible object count
+* Culled object count
+* Active culling mode
+* Active worker thread count
+* Maximum available hardware threads
+* Culling time
+* Frame processing time
+* Frames per second (FPS)
+
+The culling configuration can be changed at runtime to compare the dedicated single-threaded implementation against the multithreaded implementation at increasing worker thread counts.
+
 ## Technologies Used
 * x86-64 operating system architecure
 * C++20
@@ -50,9 +70,15 @@ Static mode will be used for benchamrking.
 * GLAD 2.0.8
 * GLM
 * Tracy Profiler
+* Dear imgui
 
 ## Build
-The project uses CMake.
+The project uses CMake. CMake automatically downloads project dependancies and manages them using FetchContent. These dependencies include:
+* SDL3
+* GLM
+* GLAD
+* Dear ImGUI
+* Tracy
 
 ### Configure
 From the project root:

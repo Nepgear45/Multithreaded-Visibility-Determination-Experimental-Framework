@@ -11,6 +11,7 @@
 #include "Visibility/MultithreadedCuller.h"
 
 enum class CameraMode {Static, Freecam};
+enum class CullingMode {SingleThreaded, Multithreaded};
 
 class Application
 {
@@ -31,6 +32,18 @@ public:
     Uint64 m_lastFrameTime = 0;
 
     Scene m_scene;
+
+    double m_cullingTimeMs = 0.0;
+    double m_frameTimeMs = 0.0;
+    double m_fps = 0.0;
+
+    // Current number of worker threads used by the multithreaded culler
+    std::size_t m_threadCount = 1;
+
+    // Maximum number of concurrent threads reported by the CPU
+    std::size_t m_maxThreadCount = 1;
+
+    CullingMode m_cullingMode = CullingMode::SingleThreaded;
 
 private:
     void ProcessEvents();
@@ -55,4 +68,6 @@ private:
     int m_windowHeight = 1080;
 
     void UpdateWindowTitle(std::size_t visibleObjects,std::size_t totalObjects);
+    void RenderPerformanceOverlay(std::size_t visibleObjects,std::size_t totalObjects);
+    void CycleCullingMode();
 };

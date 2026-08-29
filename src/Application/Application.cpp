@@ -4,9 +4,14 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_opengl3.h>
+
 #include "System/CPUInfo.h"
 #include "Visibility/Frustum.h"
 
+#include <chrono>
 #include <iostream>
 #include <thread>
 #include <string>
@@ -86,6 +91,14 @@ bool Application::Initialise()
         SDL_Quit();
         return false;
     }
+
+    // Create the Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::StyleColorsDark();
+    ImGui_ImplSDL3_InitForOpenGL(m_window, m_glContext);
+    ImGui_ImplOpenGL3_Init("#version 460");
 
     // Load OpenGL Functions using GLAD
     int version = gladLoadGL
@@ -254,9 +267,9 @@ bool Application::Initialise()
     // Scene generation
     m_scene.GenerateGrid
     (
-        5,
-        3,
-        5,
+        12,
+        12,
+        12,
         5.0f
     );
 
@@ -268,6 +281,15 @@ bool Application::Initialise()
 
     // Disable mouse hitting the edge of the window
     SDL_SetWindowRelativeMouseMode(m_window, true);
+
+    // Get the maximum number of concurrent threads reported by the CPU
+    m_maxThreadCount = static_cast<std::size_t>(std::thread::hardware_concurrency());
+
+    // Temp
+    std::cout << "Maximum Hardware Threads: " << m_maxThreadCount << '\n';
+
+    // hardware_concurrency can return 0 if the value cannot be determined
+    if (m_maxThreadCount == 0) m_maxThreadCount = 2;
 
     // Application State
     m_running = true;
@@ -299,6 +321,9 @@ void Application::ProcessEvents()
 
     while (SDL_PollEvent(&event))
     {
+        // Allow Dear ImGui to process SDL input events
+        ImGui_ImplSDL3_ProcessEvent(&event);
+
         if (event.type == SDL_EVENT_QUIT)
         {
             m_running = false;
@@ -317,6 +342,7 @@ void Application::ProcessEvents()
 
         if (event.type == SDL_EVENT_KEY_DOWN)
         {
+            // F1 - Toggle freecam
             if (event.key.scancode == SDL_SCANCODE_F1)
             {
                 if (m_cameraMode == CameraMode::Freecam)
@@ -332,6 +358,9 @@ void Application::ProcessEvents()
                     std::cout << "Camera Mode: Freecam\n";
                 }
             }
+
+            // F2 - Cycle through culling configurations
+            if (event.key.key == SDLK_F2 && !event.key.repeat) CycleCullingMode();
         }
     }
 }
@@ -361,6 +390,9 @@ void Application::Update()
 
 void Application::Render()
 {
+    // Start measuring total frame time
+    const auto frameStartTime = std::chrono::high_resolution_clock::now();
+
     // Get Object Count
     const std::size_t totalObjects = m_scene.GetObjects().size();
 
@@ -384,24 +416,39 @@ void Application::Render()
     // Extract the camera frustum ONCE per frame
     const Frustum frustum = Frustum::FromViewProjection(viewProjection);
 
-    // Test every scene object against the frustum using the single-threaded culler
-    // Visible objects are stored inside m_visibleObjects
-    /*
-    m_singleThreadedCuller.Cull
-    (
-        m_scene.GetObjects(),
-        frustum,
-        m_visibleObjects
-    );
-    */
+    // --------------------------------------------- Culling starts ---------------------------------------------
 
-    m_multithreadedCuller.Cull
-    (
-        m_scene.GetObjects(),
-        frustum,
-        m_visibleObjects,
-        4
-    );
+    // Start measuring visibility determination time
+    const auto cullingStartTime = std::chrono::high_resolution_clock::now();
+
+    // Run the currently selected visibility determination method
+    if (m_cullingMode == CullingMode::SingleThreaded)
+    {
+        m_singleThreadedCuller.Cull
+        (
+            m_scene.GetObjects(),
+            frustum,
+            m_visibleObjects
+        );
+    }
+    else
+    {
+        m_multithreadedCuller.Cull
+        (
+            m_scene.GetObjects(),
+            frustum,
+            m_visibleObjects,
+            m_threadCount
+        );
+    }
+
+    // Finish measuring visibility determination time
+    const auto cullingEndTime = std::chrono::high_resolution_clock::now();
+
+    // Convert the culling time into milliseconds
+    m_cullingTimeMs = std::chrono::duration<double, std::milli>(cullingEndTime - cullingStartTime).count();
+
+    // --------------------------------------------- Culling ends ---------------------------------------------
 
     // Get the number of objects that passed the culling test
     const std::size_t visibleObjects = m_visibleObjects.size();
@@ -437,6 +484,29 @@ void Application::Render()
     // Unbind the cube VAO after all visible objects have been rendered
     glBindVertexArray(0);
 
+    // Finish measuring total frame time
+    const auto frameEndTime = std::chrono::high_resolution_clock::now();
+
+    // Convert the frame time into milliseconds
+    m_frameTimeMs = std::chrono::duration<double, std::milli>(frameEndTime - frameStartTime).count();
+
+    // Calculate frames per second from the frame time
+    if (m_frameTimeMs > 0.0) m_fps = 1000.0 / m_frameTimeMs;
+
+    // Start a new Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    // Draw the real-time performance overlay
+    RenderPerformanceOverlay(visibleObjects, totalObjects);
+
+    // Finish building the Dear ImGui frame
+    ImGui::Render();
+
+    // Render the Dear ImGui interface over the 3D scene
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
     // Update the window title with visible and total object counts
     UpdateWindowTitle(visibleObjects, totalObjects);
 
@@ -446,6 +516,15 @@ void Application::Render()
 
 void Application::Shutdown()
 {
+    // Shut down the Dear ImGui renderer backend
+    ImGui_ImplOpenGL3_Shutdown();
+
+    // Shut down the Dear ImGui SDL3 platform backend
+    ImGui_ImplSDL3_Shutdown();
+
+    // Destroy the Dear ImGui context
+    ImGui::DestroyContext();
+
     // Check and delete OpenGL resources
     if (m_triangleVBO != 0)
     {
@@ -488,4 +567,84 @@ void Application::UpdateWindowTitle(std::size_t visibleObjects, std::size_t tota
 {
     const std::string title = "Visibility Framework | Visible: " + std::to_string(visibleObjects) + " / " + std::to_string(totalObjects);
     SDL_SetWindowTitle( m_window, title.c_str());
+}
+
+void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size_t totalObjects)
+{
+    // Calculate how many objects were rejected by visibility determination
+    const std::size_t culledObjects = totalObjects - visibleObjects;
+
+    // Convert the current camera mode into readable text
+    const char* cameraMode = m_cameraMode == CameraMode::Freecam ? "Freecam" : "Static";
+
+    // Convert the current culling mode into readable text
+    const char* cullingMode = m_cullingMode == CullingMode::SingleThreaded ? "Single Thread" : "Multithreaded";
+
+    // Single-threaded mode always reports one active thread
+    const std::size_t activeThreads = m_cullingMode == CullingMode::SingleThreaded ? 1 : m_threadCount;
+
+    // Position the performance overlay in the top-left corner
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
+
+    // Give the overlay a fixed width
+    ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Always);
+
+    // Keep the performance overlay fixed and unobtrusive
+    const ImGuiWindowFlags windowFlags =
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_AlwaysAutoResize;
+
+    // Begin drawing the performance overlay
+    ImGui::Begin("Visibility Determination Framework", nullptr, windowFlags);
+
+    ImGui::Text("Camera:          %s", cameraMode);
+    ImGui::Separator();
+    ImGui::Text("Objects:         %zu", totalObjects);
+    ImGui::Text("Visible:         %zu", visibleObjects);
+    ImGui::Text("Culled:          %zu", culledObjects);
+    ImGui::Separator();
+    ImGui::Text("Culling Mode:    %s", cullingMode);
+    ImGui::Text("Threads Used:    %zu", activeThreads);
+    ImGui::Text("CPU Max Threads: %zu", m_maxThreadCount);
+    ImGui::Text("Culling Time:    %.3f ms", m_cullingTimeMs);
+    ImGui::Separator();
+    ImGui::Text("Frame Time:      %.3f ms", m_frameTimeMs);
+    ImGui::Text("FPS:             %.1f", m_fps);
+
+    ImGui::End();
+}
+
+void Application::CycleCullingMode()
+{
+    // If currently using single-threaded culling, switch to the multithreaded culler starting with two worker threads
+    if (m_cullingMode == CullingMode::SingleThreaded)
+    {
+        // If the CPU cannot support at least two threads, remain in single-threaded mode
+        if (m_maxThreadCount < 2) return;
+
+        m_cullingMode = CullingMode::Multithreaded;
+        m_threadCount = 2;
+        return;
+    }
+
+    // Increase the number of worker threads by two
+    if (m_threadCount + 2 <= m_maxThreadCount)
+    {
+        m_threadCount += 2;
+        return;
+    }
+
+    // If the CPU has an unusual odd maximum thread count, allow the final configuration to use every available thread
+    if (m_threadCount < m_maxThreadCount)
+    {
+        m_threadCount = m_maxThreadCount;
+        return;
+    }
+
+    // Once the maximum CPU thread count has been reached, wrap back around to the single-threaded implementation
+    m_cullingMode = CullingMode::SingleThreaded;
+    m_threadCount = 1;
 }
