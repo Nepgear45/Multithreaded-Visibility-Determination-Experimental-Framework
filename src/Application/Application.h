@@ -4,6 +4,7 @@
 
 #include "Rendering/Shader.h"
 #include "Camera/Camera.h"
+#include "Scene/Scene.h"
 
 enum class CameraMode {Static, Freecam};
 
@@ -24,6 +25,8 @@ public:
 
     float m_deltaTime = 0.0f;
     Uint64 m_lastFrameTime = 0;
+
+    Scene m_scene;
 
 private:
     void ProcessEvents();

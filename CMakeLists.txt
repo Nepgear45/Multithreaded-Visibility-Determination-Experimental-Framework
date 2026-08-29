@@ -72,6 +72,10 @@ set(
     src/Camera/Camera.h
     src/Camera/Camera.cpp
 
+    src/Scene/SceneObject.h
+    src/Scene/Scene.h
+    src/Scene/Scene.cpp
+
     src/Application/Application.h
     src/Application/Application.cpp
     src/Rendering/Shader.cpp

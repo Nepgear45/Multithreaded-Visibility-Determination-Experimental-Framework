@@ -250,6 +250,15 @@ bool Application::Initialise()
 
     glBindVertexArray(0);
 
+    // Scene generation
+    m_scene.GenerateGrid
+    (
+        5,
+        3,
+        5,
+        2.0f
+    );
+
     // Enable VSync
     if (!SDL_GL_SetSwapInterval(1))
     {
@@ -351,73 +360,49 @@ void Application::Update()
 
 void Application::Render()
 {
-    glClearColor
-    (
-        0.1f,
-        0.1f,
-        0.1f,
-        1.0f
-    );
-
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Bind Shader
-    m_triangleShader.Bind();
-
-    // Model Matrix
-    glm::mat4 model = glm::mat4(1.0f);
-
-    model = glm::rotate
-        (
-            model,
-            glm::radians(25.0f),
-            glm::vec3(1.0f, 0.5f, 0.0f)
-        );
-
-    // View Matrix
     const glm::mat4 view = m_camera.GetViewMatrix();
 
-    // Projection Matrix
-    const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-
-    glm::mat4 projection = glm::perspective
+    const glm::mat4 projection = glm::perspective
         (
             glm::radians(60.0f),
-            aspectRatio,
+            static_cast<float>(m_windowWidth) /
+            static_cast<float>(m_windowHeight),
             0.1f,
-            100.0f
+            1000.0f
         );
 
-    // Send Matrices to Shader
-    m_triangleShader.SetMat4
-    (
-        "uModel",
-        model
-    );
+    m_triangleShader.Bind();
+    m_triangleShader.SetMat4("uView", view);
+    m_triangleShader.SetMat4("uProjection", projection);
 
-    m_triangleShader.SetMat4
-    (
-        "uView",
-        view
-    );
-
-    m_triangleShader.SetMat4
-    (
-        "uProjection",
-        projection
-    );
-
-    // Draw Cube
     glBindVertexArray(m_triangleVAO);
-    glDrawArrays
-    (
-        GL_TRIANGLES,
-        0,
-        36
-    );
+
+    for (const SceneObject& object : m_scene.GetObjects())
+    {
+        glm::mat4 model{ 1.0f };
+
+        // Position
+        model = glm::translate(model, object.position);
+
+        // Rotation
+        model = glm::rotate(model, glm::radians(object.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(object.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(object.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        // Scale
+        model = glm::scale(model, object.scale);
+
+        // Send this object's transform to the shader.
+        m_triangleShader.SetMat4("uModel", model);
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
     glBindVertexArray(0);
 
-    // Present Frame
     SDL_GL_SwapWindow(m_window);
 }
 
