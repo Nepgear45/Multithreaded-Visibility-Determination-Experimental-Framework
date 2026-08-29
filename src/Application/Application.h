@@ -2,10 +2,12 @@
 
 #include <SDL3/SDL.h>
 #include <cstddef>
+#include <vector>
 
 #include "Rendering/Shader.h"
 #include "Camera/Camera.h"
 #include "Scene/Scene.h"
+#include "Visibility/SingleThreadedCuller.h"
 
 enum class CameraMode {Static, Freecam};
 
@@ -41,6 +43,9 @@ private:
     GLuint m_triangleVBO = 0;
 
     Shader m_triangleShader;
+
+    SingleThreadedCuller m_singleThreadedCuller;
+    std::vector<const SceneObject*> m_visibleObjects;
 
     bool m_running = false;
 

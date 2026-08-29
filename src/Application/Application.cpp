@@ -362,69 +362,63 @@ void Application::Update()
 void Application::Render()
 {
     // Get Object Count
-    std::size_t visibleObjects = 0;
     const std::size_t totalObjects = m_scene.GetObjects().size();
 
     // Clear Buffers
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Calculate camera matrices
     const glm::mat4 view = m_camera.GetViewMatrix();
-
     const glm::mat4 projection = glm::perspective
-        (
-            glm::radians(60.0f),
-            static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight),
-            0.1f,
-            1000.0f
-        );
+    (
+        glm::radians(60.0f),
+        static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight),
+        0.1f,
+        1000.0f
+    );
 
     // Build the view-projection matrix
-    const glm::mat4 viewProjection =  projection * view;
+    const glm::mat4 viewProjection = projection * view;
 
     // Extract the camera frustum ONCE per frame
     const Frustum frustum = Frustum::FromViewProjection(viewProjection);
 
+    // Test every scene object against the frustum using the single-threaded culler
+    // Visible objects are stored inside m_visibleObjects
+    m_singleThreadedCuller.Cull
+    (
+        m_scene.GetObjects(),
+        frustum,
+        m_visibleObjects
+    );
+
+    // Get the number of objects that passed the culling test
+    const std::size_t visibleObjects = m_visibleObjects.size();
+
     // Bind shader and send matrices that are shared by every object
     m_triangleShader.Bind();
-
     m_triangleShader.SetMat4("uView", view);
     m_triangleShader.SetMat4("uProjection", projection);
 
+    // Bind the cube VAO before rendering visible objects
     glBindVertexArray(m_triangleVAO);
 
-    // Test every scene object against the frustum
-    for (const SceneObject& object : m_scene.GetObjects())
+    // Render every object that passed the frustum culling test
+    for (const SceneObject* object : m_visibleObjects)
     {
         // Build this object's model matrix using its position, rotation and scale
-        // This is built before the culling test because it is also used to transform the object's local-space AABB into a world-space AABB
         glm::mat4 model{ 1.0f };
 
-        model = glm::translate(model, object.position);
-        model = glm::rotate(model, glm::radians(object.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, glm::radians(object.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::rotate(model, glm::radians(object.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-        model = glm::scale(model, object.scale);
-
-        // Transform this object's local-space AABB into a world-space AABB
-        // using the same model matrix that will be used to render the object
-        const AABB worldBounds = object.localBounds.Transform(model);
-
-        // If the object is outside the camera frustum, skip everything below and move to the next object, add to object count if visible
-        if (!frustum.Intersects(worldBounds)) continue;
-        ++visibleObjects;
+        model = glm::translate(model, object->position);
+        model = glm::rotate(model, glm::radians(object->rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(object->rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(object->rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        model = glm::scale(model, object->scale);
 
         // Send the model matrix and colour to the shader for this visible object
         m_triangleShader.SetMat4("uModel", model);
-        m_triangleShader.SetVec3("uColour", object.colour);
-
-        // Draw only objects that passed the culling test
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
-        // Send the model matrix to the shader for this visible object
-        m_triangleShader.SetMat4("uModel", model);
+        m_triangleShader.SetVec3("uColour", object->colour);
 
         // Draw only objects that passed the culling test
         glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -433,8 +427,10 @@ void Application::Render()
     // Unbind the cube VAO after all visible objects have been rendered
     glBindVertexArray(0);
 
+    // Update the window title with visible and total object counts
     UpdateWindowTitle(visibleObjects, totalObjects);
 
+    // Present the completed frame to the window
     SDL_GL_SwapWindow(m_window);
 }
 

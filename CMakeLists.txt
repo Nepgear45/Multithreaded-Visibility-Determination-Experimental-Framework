@@ -81,6 +81,9 @@ set(
     src/Visibility/Frustum.h
     src/Visibility/Frustum.cpp
 
+    src/Visibility/SingleThreadedCuller.h
+    src/Visibility/SingleThreadedCuller.cpp
+
     src/Application/Application.h
     src/Application/Application.cpp
     src/Rendering/Shader.cpp
