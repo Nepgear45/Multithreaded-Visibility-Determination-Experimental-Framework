@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <cstddef>
 
 #include "Rendering/Shader.h"
 #include "Camera/Camera.h"
@@ -45,4 +46,6 @@ private:
 
     int m_windowWidth = 1920;
     int m_windowHeight = 1080;
+
+    void UpdateWindowTitle(std::size_t visibleObjects,std::size_t totalObjects);
 };

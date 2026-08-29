@@ -76,6 +76,10 @@ set(
     src/Scene/Scene.h
     src/Scene/Scene.cpp
 
+    src/Visibility/AABB.h
+    src/Visibility/Frustum.h
+    src/Visibility/Frustum.cpp
+
     src/Application/Application.h
     src/Application/Application.cpp
     src/Rendering/Shader.cpp

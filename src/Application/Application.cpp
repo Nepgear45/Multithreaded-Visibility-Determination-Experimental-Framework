@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "System/CPUInfo.h"
+#include "Visibility/Frustum.h"
 
 #include <iostream>
 #include <thread>
@@ -327,7 +328,7 @@ void Application::ProcessEvents()
                 else
                 {
                     m_cameraMode = CameraMode::Freecam;
-                    SDL_SetWindowRelativeMouseMode( m_window, true);
+                    SDL_SetWindowRelativeMouseMode(m_window, true);
                     std::cout << "Camera Mode: Freecam\n";
                 }
             }
@@ -360,48 +361,71 @@ void Application::Update()
 
 void Application::Render()
 {
+    // Get Object Count
+    std::size_t visibleObjects = 0;
+    const std::size_t totalObjects = m_scene.GetObjects().size();
+
+    // Clear Buffers
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Calculate camera matrices
     const glm::mat4 view = m_camera.GetViewMatrix();
 
     const glm::mat4 projection = glm::perspective
         (
             glm::radians(60.0f),
-            static_cast<float>(m_windowWidth) /
-            static_cast<float>(m_windowHeight),
+            static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight),
             0.1f,
             1000.0f
         );
 
+    // Build the view-projection matrix
+    const glm::mat4 viewProjection =  projection * view;
+
+    // Extract the camera frustum ONCE per frame
+    const Frustum frustum = Frustum::FromViewProjection(viewProjection);
+
+    // Bind shader and send matrices that are shared by every object
     m_triangleShader.Bind();
+
     m_triangleShader.SetMat4("uView", view);
     m_triangleShader.SetMat4("uProjection", projection);
 
     glBindVertexArray(m_triangleVAO);
 
+    // Test every scene object against the frustum
     for (const SceneObject& object : m_scene.GetObjects())
     {
+        // Build this object's world-space AABB
+        AABB worldBounds;
+
+        worldBounds.min = object.localBounds.min + object.position;
+        worldBounds.max = object.localBounds.max + object.position;
+
+        // If the object is outside the camera frustum, skip everything below and move to the next object, add to object count if visible
+        if (!frustum.Intersects(worldBounds)) continue;
+        ++visibleObjects;
+
+        // Only build the model matrix for visible objects
         glm::mat4 model{ 1.0f };
 
-        // Position
         model = glm::translate(model, object.position);
-
-        // Rotation
         model = glm::rotate(model, glm::radians(object.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, glm::radians(object.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::rotate(model, glm::radians(object.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        model = glm::scale( model, object.scale);
 
-        // Scale
-        model = glm::scale(model, object.scale);
-
-        // Send this object's transform to the shader.
         m_triangleShader.SetMat4("uModel", model);
 
+        // Draw only objects that passed the culling test
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
     glBindVertexArray(0);
+
+    UpdateWindowTitle(visibleObjects, totalObjects);
 
     SDL_GL_SwapWindow(m_window);
 }
@@ -444,4 +468,10 @@ void Application::Shutdown()
     }
 
     SDL_Quit();
+}
+
+void Application::UpdateWindowTitle(std::size_t visibleObjects, std::size_t totalObjects)
+{
+    const std::string title = "Visibility Framework | Visible: " + std::to_string(visibleObjects) + " / " + std::to_string(totalObjects);
+    SDL_SetWindowTitle( m_window, title.c_str());
 }
