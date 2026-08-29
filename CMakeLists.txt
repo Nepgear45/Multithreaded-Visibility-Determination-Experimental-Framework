@@ -77,6 +77,7 @@ set(
     src/Scene/Scene.cpp
 
     src/Visibility/AABB.h
+    src/Visibility/AABB.cpp
     src/Visibility/Frustum.h
     src/Visibility/Frustum.cpp
 

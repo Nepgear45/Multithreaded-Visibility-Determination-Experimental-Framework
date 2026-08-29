@@ -21,6 +21,8 @@ public:
         return m_programID;
     }
 
+    void SetVec3(const std::string& name, const glm::vec3& value) const;
+
 private:
     static std::string ReadFile(const std::string& path);
     static GLuint CompileShader(GLenum type, const std::string& source);

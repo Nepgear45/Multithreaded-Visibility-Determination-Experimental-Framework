@@ -6,4 +6,6 @@ struct AABB
 {
     glm::vec3 min;
     glm::vec3 max;
+
+    AABB Transform(const glm::mat4& matrix) const;
 };

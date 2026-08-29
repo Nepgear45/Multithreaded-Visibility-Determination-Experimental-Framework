@@ -257,7 +257,7 @@ bool Application::Initialise()
         5,
         3,
         5,
-        2.0f
+        5.0f
     );
 
     // Enable VSync
@@ -398,31 +398,39 @@ void Application::Render()
     // Test every scene object against the frustum
     for (const SceneObject& object : m_scene.GetObjects())
     {
-        // Build this object's world-space AABB
-        AABB worldBounds;
-
-        worldBounds.min = object.localBounds.min + object.position;
-        worldBounds.max = object.localBounds.max + object.position;
-
-        // If the object is outside the camera frustum, skip everything below and move to the next object, add to object count if visible
-        if (!frustum.Intersects(worldBounds)) continue;
-        ++visibleObjects;
-
-        // Only build the model matrix for visible objects
+        // Build this object's model matrix using its position, rotation and scale
+        // This is built before the culling test because it is also used to transform the object's local-space AABB into a world-space AABB
         glm::mat4 model{ 1.0f };
 
         model = glm::translate(model, object.position);
         model = glm::rotate(model, glm::radians(object.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, glm::radians(object.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::rotate(model, glm::radians(object.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-        model = glm::scale( model, object.scale);
+        model = glm::scale(model, object.scale);
 
+        // Transform this object's local-space AABB into a world-space AABB
+        // using the same model matrix that will be used to render the object
+        const AABB worldBounds = object.localBounds.Transform(model);
+
+        // If the object is outside the camera frustum, skip everything below and move to the next object, add to object count if visible
+        if (!frustum.Intersects(worldBounds)) continue;
+        ++visibleObjects;
+
+        // Send the model matrix and colour to the shader for this visible object
+        m_triangleShader.SetMat4("uModel", model);
+        m_triangleShader.SetVec3("uColour", object.colour);
+
+        // Draw only objects that passed the culling test
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Send the model matrix to the shader for this visible object
         m_triangleShader.SetMat4("uModel", model);
 
         // Draw only objects that passed the culling test
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
+    // Unbind the cube VAO after all visible objects have been rendered
     glBindVertexArray(0);
 
     UpdateWindowTitle(visibleObjects, totalObjects);
