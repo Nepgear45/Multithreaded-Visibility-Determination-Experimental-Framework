@@ -16,6 +16,22 @@ The framework is being developed as part of a research project comparing single-
 * Camera system
 * Freecam movement and mouse look
 * Static camera mode
+* Deterministic scene generation
+* Configurable scene object counts and presets
+* Per-object axis-aligned bounding boxes (AABBs)
+* World-space AABB transformation
+* Camera frustum extraction
+* CPU-side frustum culling
+* Single-threaded visibility determination
+* Basic multithreaded visibility determination with per-frame worker thread creation
+* Persistent-worker multithreaded visibility determination
+* Configurable worker thread counts
+* Shared visibility-test logic across culling implementations
+* Dear ImGui runtime interface
+* Runtime culling implementation selection
+* Runtime scene configuration
+* Real-time visibility statistics
+* Real-time culling time, frame time and FPS measurements
 
 ## Camera Controls
 | Input       | Action                                         |
@@ -27,8 +43,24 @@ The framework is being developed as part of a research project comparing single-
 | `Space`     | Move up                                        |
 | `Left Ctrl` | Move down                                      |
 | `Mouse`     | Rotate / look around                           |
-| `F1`        | Toggle between Freecam and Static camera modes |
-| `F2`        | Cycle culling configuration                    |
+| `F1`        | Toggle camera mode                             |
+| `F2`        | Cycle worker thread count                      |
+| `F3`        | Cycle culling implementation                   |
+| `F4`        | Cycle object-count preset                      |
+| `F10`       | Show / hide shortcut overlay                   |
+
+### Runtime Interface
+Dear ImGui provides runtime controls and performance information without requiring the application to be restarted.
+
+The interface currently provides:
+* Culling implementation selection
+* Worker-thread count control
+* Object-count preset selection
+* Unlocked object-count control
+* Total, visible and culled object counts
+* Culling time
+* Frame time
+* FPS
 
 ### Freecam Mode
 Freecam allows the camera to move freely through the rendered scene using the keyboard and mouse.
@@ -41,8 +73,30 @@ Static mode disables Freecam movement and mouse rotation.
 Press `F1` to switch between Static and Freecam modes.
 Static mode will be used for benchamrking.
 
-### Performance Monitoring
+### Visibility Determination
+The framework currently provides three CPU-side frustum-culling implementations:
+* **Single Thread** — sequential reference implementation.
+* **Basic Multithreaded** — divides the scene between multiple worker threads created for each culling operation.
+* **Persistent Multithreaded** — uses a persistent worker pool to avoid repeated thread creation and destruction between frames.
 
+All implementations perform the same world-space AABB against camera-frustum visibility test, allowing their threading strategies to be compared under equivalent scene conditions.
+
+### Scene Configuration
+The framework supports configurable scene sizes for evaluating visibility-determination performance under different workloads.
+
+Available object-count presets are:
+* 100
+* 500
+* 1,000
+* 2,500
+* 5,000
+* 7,500
+* 10,000
+
+Object count can also be unlocked and adjusted between 100 and 10,000 objects in increments of 100.
+Scene generation is deterministic to provide repeatable object placement and colours between runs.
+
+### Performance Monitoring
 The framework includes a Dear ImGui performance overlay for monitoring the visibility determination system during development.
 Press `F2` to cycle between culling configuration.
 

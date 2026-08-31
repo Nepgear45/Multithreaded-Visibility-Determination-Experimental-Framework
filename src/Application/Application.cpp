@@ -15,6 +15,23 @@
 #include <iostream>
 #include <thread>
 #include <string>
+#include <limits>
+
+namespace
+{
+    constexpr std::size_t ObjectCountPresets[] =
+    {
+        100,
+        500,
+        1000,
+        2500,
+        5000,
+        7500,
+        10000
+    };
+
+    constexpr std::size_t ObjectCountPresetCount = sizeof(ObjectCountPresets) / sizeof(ObjectCountPresets[0]);
+}
 
 Application::Application()
 {
@@ -92,19 +109,8 @@ bool Application::Initialise()
         return false;
     }
 
-    // Create the Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::StyleColorsDark();
-    ImGui_ImplSDL3_InitForOpenGL(m_window, m_glContext);
-    ImGui_ImplOpenGL3_Init("#version 460");
-
     // Load OpenGL Functions using GLAD
-    int version = gladLoadGL
-    (
-        SDL_GL_GetProcAddress
-    );
+    int version = gladLoadGL(SDL_GL_GetProcAddress);
 
     if (version == 0)
     {
@@ -119,6 +125,14 @@ bool Application::Initialise()
         SDL_Quit();
         return false;
     }
+
+    // Create the Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::StyleColorsDark();
+    ImGui_ImplSDL3_InitForOpenGL(m_window, m_glContext);
+    ImGui_ImplOpenGL3_Init("#version 460");    
 
     // Display CPU Information
     CPUInfo::Print();
@@ -265,13 +279,7 @@ bool Application::Initialise()
     glBindVertexArray(0);
 
     // Scene generation
-    m_scene.GenerateGrid
-    (
-        12,
-        12,
-        12,
-        5.0f
-    );
+    RegenerateScene();
 
     // Enable VSync
     if (!SDL_GL_SetSwapInterval(1))
@@ -285,11 +293,11 @@ bool Application::Initialise()
     // Get the maximum number of concurrent threads reported by the CPU
     m_maxThreadCount = static_cast<std::size_t>(std::thread::hardware_concurrency());
 
-    // Temp
-    std::cout << "Maximum Hardware Threads: " << m_maxThreadCount << '\n';
-
-    // hardware_concurrency can return 0 if the value cannot be determined
+    // Hardware_concurrency can return 0 if the value cannot be determined
     if (m_maxThreadCount == 0) m_maxThreadCount = 2;
+
+    // Create the persistent worker pool using the maximum number of hardware threads reported by the system
+    m_persistentMultithreadedCuller.Initialize(m_maxThreadCount);
 
     // Application State
     m_running = true;
@@ -343,7 +351,7 @@ void Application::ProcessEvents()
         if (event.type == SDL_EVENT_KEY_DOWN)
         {
             // F1 - Toggle freecam
-            if (event.key.scancode == SDL_SCANCODE_F1)
+            if (event.key.scancode == SDL_SCANCODE_F1 && !event.key.repeat)
             {
                 if (m_cameraMode == CameraMode::Freecam)
                 {
@@ -359,8 +367,18 @@ void Application::ProcessEvents()
                 }
             }
 
-            // F2 - Cycle through culling configurations
-            if (event.key.key == SDLK_F2 && !event.key.repeat) CycleCullingMode();
+            // F2 - Cycle through worker thread counts
+            if (event.key.scancode == SDL_SCANCODE_F2 && !event.key.repeat) CycleThreadCount();
+
+            // F3 - Cycle through the available culling implementations
+            if (event.key.scancode == SDL_SCANCODE_F3 && !event.key.repeat) CycleCullingMode();
+
+            // F4 - Cycle through the object presets
+            if (event.key.scancode == SDL_SCANCODE_F4 && !event.key.repeat) CycleObjectCountPreset();
+
+
+            // F10 - Toggle shortcuts
+            if (event.key.scancode == SDL_SCANCODE_F10 && !event.key.repeat) m_showShortcuts = !m_showShortcuts;
         }
     }
 }
@@ -431,7 +449,7 @@ void Application::Render()
             m_visibleObjects
         );
     }
-    else
+    else if (m_cullingMode == CullingMode::Multithreaded)
     {
         m_multithreadedCuller.Cull
         (
@@ -441,6 +459,16 @@ void Application::Render()
             m_threadCount
         );
     }
+    else
+    {
+        m_persistentMultithreadedCuller.Cull
+        (
+            m_scene.GetObjects(),
+            frustum,
+            m_visibleObjects,
+            m_threadCount
+        );
+}
 
     // Finish measuring visibility determination time
     const auto cullingEndTime = std::chrono::high_resolution_clock::now();
@@ -498,8 +526,9 @@ void Application::Render()
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    // Draw the real-time performance overlay
+    // Draw the real-time performance overlay and shortcuts helper
     RenderPerformanceOverlay(visibleObjects, totalObjects);
+    RenderShortcutsOverlay();
 
     // Finish building the Dear ImGui frame
     ImGui::Render();
@@ -577,9 +606,6 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
     // Convert the current camera mode into readable text
     const char* cameraMode = m_cameraMode == CameraMode::Freecam ? "Freecam" : "Static";
 
-    // Convert the current culling mode into readable text
-    const char* cullingMode = m_cullingMode == CullingMode::SingleThreaded ? "Single Thread" : "Multithreaded";
-
     // Single-threaded mode always reports one active thread
     const std::size_t activeThreads = m_cullingMode == CullingMode::SingleThreaded ? 1 : m_threadCount;
 
@@ -587,7 +613,7 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
     ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
 
     // Give the overlay a fixed width
-    ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(450.0f, 0.0f), ImGuiCond_Always);
 
     // Keep the performance overlay fixed and unobtrusive
     const ImGuiWindowFlags windowFlags =
@@ -600,51 +626,224 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
     // Begin drawing the performance overlay
     ImGui::Begin("Visibility Determination Framework", nullptr, windowFlags);
 
-    ImGui::Text("Camera:          %s", cameraMode);
+    ImGui::Text("Culling Configuration");
     ImGui::Separator();
-    ImGui::Text("Objects:         %zu", totalObjects);
-    ImGui::Text("Visible:         %zu", visibleObjects);
-    ImGui::Text("Culled:          %zu", culledObjects);
+
+    const char* cullingModeLabels[] =
+    {
+        "Single Thread",
+        "Basic Multithreaded",
+        "Persistent Multithreaded"
+    };
+
+    int selectedCullingMode = static_cast<int>(m_cullingMode);
+
+    ImGui::Text("Implementation:");
+    ImGui::SameLine(180.0f);
+    ImGui::SetNextItemWidth(200.0f);
+    
+    if (ImGui::Combo("##CullingMode", &selectedCullingMode, cullingModeLabels, IM_ARRAYSIZE(cullingModeLabels))) m_cullingMode = static_cast<CullingMode>(selectedCullingMode);
+
+    // Display the active thread count
+    ImGui::Text("Worker Threads: %zu", activeThreads);
+
+    // Only show the thread slider for multithreaded implementations
+    if (m_cullingMode != CullingMode::SingleThreaded)
+    {
+        ImGui::SameLine();
+
+        // Convert the worker count into a slider position
+        int threadStep = static_cast<int>(m_threadCount / 2);
+        const int maximumThreadStep = static_cast<int>(m_maxThreadCount / 2);
+
+        // Set the width of the thread-count slider
+        ImGui::SetNextItemWidth(160.0f);
+
+        // Convert the slider position back into a worker count
+        if (ImGui::SliderInt("##ThreadCount", &threadStep, 1, maximumThreadStep, "")) m_threadCount = static_cast<std::size_t>(threadStep * 2);
+    }
+
+    ImGui::Text("Maximum Threads: %zu", m_maxThreadCount);
+
+    ImGui::Spacing();
+
+    ImGui::Text("Scene Configuration");
     ImGui::Separator();
-    ImGui::Text("Culling Mode:    %s", cullingMode);
-    ImGui::Text("Threads Used:    %zu", activeThreads);
-    ImGui::Text("CPU Max Threads: %zu", m_maxThreadCount);
-    ImGui::Text("Culling Time:    %.3f ms", m_cullingTimeMs);
+
+    // Store Previous Unlock State
+    const bool previousUnlockedState = m_unlockedObjectCount;
+
+    // Unlock Object Count
+    ImGui::Checkbox("Unlock Object Count", &m_unlockedObjectCount);
+
+    // Snap Back To Closest Preset
+    if (previousUnlockedState && !m_unlockedObjectCount)
+    {
+        std::size_t closestPresetIndex = 0;
+        std::size_t smallestDifference = std::numeric_limits<std::size_t>::max();
+
+        for (std::size_t i = 0; i < std::size(ObjectCountPresets); ++i)
+        {
+            const std::size_t presetValue = ObjectCountPresets[i];
+            const std::size_t difference = presetValue > m_requestedObjectCount ? presetValue - m_requestedObjectCount : m_requestedObjectCount - presetValue;
+
+            if (difference < smallestDifference)
+            {
+                smallestDifference = difference;
+                closestPresetIndex = i;
+            }
+        }
+
+        m_objectCountPresetIndex = closestPresetIndex;
+        m_requestedObjectCount = ObjectCountPresets[m_objectCountPresetIndex];
+
+        RegenerateScene();
+    }
+
+    ImGui::Spacing();
+
+    // Preset Object Count
+    if (!m_unlockedObjectCount)
+    {
+        const char* objectCountPresetLabels[] =
+        {
+            "100",
+            "500",
+            "1,000",
+            "2,500",
+            "5,000",
+            "7,500",
+            "10,000"
+        };
+
+        int selectedPreset = static_cast<int>(m_objectCountPresetIndex);
+
+        ImGui::Text("Object Count: %zu", m_requestedObjectCount);
+        ImGui::SameLine(180.0f);
+        ImGui::SetNextItemWidth(200.0f);
+
+        if (ImGui::Combo("##ObjectCountPreset", &selectedPreset, objectCountPresetLabels, IM_ARRAYSIZE(objectCountPresetLabels)))
+        {
+            m_objectCountPresetIndex = static_cast<std::size_t>(selectedPreset);
+            m_requestedObjectCount = ObjectCountPresets[m_objectCountPresetIndex];
+            RegenerateScene();
+        }
+    }
+    // Unlocked Object Count
+    else
+    {
+        int objectCountStep = static_cast<int>(m_requestedObjectCount / 100);
+
+        ImGui::Text("Object Count: %zu", m_requestedObjectCount);
+        ImGui::SameLine(180.0f);
+        ImGui::SetNextItemWidth(200.0f);
+
+        if (ImGui::SliderInt("##ObjectCount", &objectCountStep, 1, 100, ""))
+        {
+            m_requestedObjectCount = static_cast<std::size_t>(objectCountStep * 100);
+            RegenerateScene();
+        }
+    }
+
+    ImGui::Spacing();
+
+    ImGui::Text("Culling Statistics");
     ImGui::Separator();
-    ImGui::Text("Frame Time:      %.3f ms", m_frameTimeMs);
-    ImGui::Text("FPS:             %.1f", m_fps);
+
+    ImGui::Text("Objects:       %zu", totalObjects);
+    ImGui::Text("Visible:       %zu", visibleObjects);
+    ImGui::Text("Culled:        %zu", culledObjects);
+
+    ImGui::Spacing();
+
+    ImGui::Text("Performance");
+    ImGui::Separator();
+
+    ImGui::Text("Culling Time:  %.3f ms", m_cullingTimeMs);
+    ImGui::Text("Frame Time:    %.3f ms", m_frameTimeMs);
+    ImGui::Text("FPS:           %.1f", m_fps);
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("Press F10 to show shortcuts");
 
     ImGui::End();
 }
 
-void Application::CycleCullingMode()
+void Application::CycleThreadCount()
 {
-    // If currently using single-threaded culling, switch to the multithreaded culler starting with two worker threads
-    if (m_cullingMode == CullingMode::SingleThreaded)
+    // Start at two worker threads
+    if (m_threadCount < 2)
     {
-        // If the CPU cannot support at least two threads, remain in single-threaded mode
-        if (m_maxThreadCount < 2) return;
-
-        m_cullingMode = CullingMode::Multithreaded;
         m_threadCount = 2;
         return;
     }
 
-    // Increase the number of worker threads by two
+    // Increase the worker count by two while staying within the maximum supported hardware thread count
     if (m_threadCount + 2 <= m_maxThreadCount)
     {
         m_threadCount += 2;
         return;
     }
 
-    // If the CPU has an unusual odd maximum thread count, allow the final configuration to use every available thread
+    // If the maximum hardware thread count is odd, allow the final configuration to use that value
     if (m_threadCount < m_maxThreadCount)
     {
         m_threadCount = m_maxThreadCount;
         return;
     }
 
-    // Once the maximum CPU thread count has been reached, wrap back around to the single-threaded implementation
-    m_cullingMode = CullingMode::SingleThreaded;
-    m_threadCount = 1;
+    // Wrap back to two worker threads
+    m_threadCount = 2;
+}
+
+void Application::CycleCullingMode()
+{
+    // Change culling mode
+    if (m_cullingMode == CullingMode::SingleThreaded) m_cullingMode = CullingMode::Multithreaded;
+    else if (m_cullingMode == CullingMode::Multithreaded) m_cullingMode = CullingMode::PersistentMultithreaded;
+    else m_cullingMode = CullingMode::SingleThreaded;
+}
+
+void Application::RegenerateScene()
+{
+    m_scene.GenerateGrid(m_requestedObjectCount, 2.0f);
+}
+
+void Application::CycleObjectCountPreset()
+{
+    if (m_unlockedObjectCount) return;
+
+    ++m_objectCountPresetIndex;
+
+    if (m_objectCountPresetIndex >= std::size(ObjectCountPresets)) m_objectCountPresetIndex = 0;
+
+    m_requestedObjectCount = ObjectCountPresets[m_objectCountPresetIndex];
+
+    RegenerateScene();
+}
+
+void Application::RenderShortcutsOverlay()
+{
+    if (!m_showShortcuts) return;
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 10.0f, viewport->WorkPos.y + 10.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+
+    const ImGuiWindowFlags windowFlags =
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings;
+
+    ImGui::Begin("Shortcuts", nullptr, windowFlags);
+
+    ImGui::Text("F1   Camera Mode");
+    ImGui::Text("F2   Cycle Worker Threads");
+    ImGui::Text("F3   Cycle Culling Implementation");
+    ImGui::Text("F4   Cycle Object Count Preset");
+    ImGui::Text("F10  Hide Shortcuts");
+
+    ImGui::End();
 }

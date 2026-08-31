@@ -7,7 +7,7 @@
 class Scene
 {
 public:
-    void GenerateGrid(int countX, int countY, int countZ, float spacing);
+    void GenerateGrid(std::size_t objectCount, float spacing);
     const std::vector<SceneObject>& GetObjects() const;
 
 private:

@@ -9,9 +9,10 @@
 #include "Scene/Scene.h"
 #include "Visibility/SingleThreadedCuller.h"
 #include "Visibility/MultithreadedCuller.h"
+#include "Visibility/PersistentMultithreadedCuller.h"
 
 enum class CameraMode {Static, Freecam};
-enum class CullingMode {SingleThreaded, Multithreaded};
+enum class CullingMode {SingleThreaded, Multithreaded, PersistentMultithreaded};
 
 class Application
 {
@@ -49,6 +50,7 @@ private:
     void ProcessEvents();
     void Update();
     void Render();
+    void RegenerateScene();
 
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_glContext = nullptr;
@@ -60,14 +62,31 @@ private:
 
     SingleThreadedCuller m_singleThreadedCuller;
     MultithreadedCuller m_multithreadedCuller;
+    PersistentMultithreadedCuller m_persistentMultithreadedCuller;
+
+    // All visibile objects
     std::vector<const SceneObject*> m_visibleObjects;
 
+    // Determines whether arbitrary object counts can be selected
+    bool m_unlockedObjectCount = false;
+
+    // Object count selected in the UI
+    std::size_t m_requestedObjectCount = 1000;
+
+    // Currently selected preset
+    std::size_t m_objectCountPresetIndex = 2;
+
     bool m_running = false;
+    bool m_showShortcuts = false;
 
     int m_windowWidth = 1920;
     int m_windowHeight = 1080;
 
     void UpdateWindowTitle(std::size_t visibleObjects,std::size_t totalObjects);
     void RenderPerformanceOverlay(std::size_t visibleObjects,std::size_t totalObjects);
+
+    void CycleThreadCount();
     void CycleCullingMode();
+    void CycleObjectCountPreset();
+    void RenderShortcutsOverlay();    
 };

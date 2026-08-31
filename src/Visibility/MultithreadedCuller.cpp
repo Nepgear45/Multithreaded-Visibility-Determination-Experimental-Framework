@@ -1,4 +1,5 @@
 #include "MultithreadedCuller.h"
+#include "VisibilityTest.h"
 
 #include <algorithm>
 #include <thread>
@@ -53,27 +54,14 @@ void MultithreadedCuller::Cull(const std::vector<SceneObject>& objects, const Fr
                 localVisibleObjects.reserve(endIndex - startIndex);
 
                 // Test every scene object assigned to this worker thread
-                for (std::size_t objectIndex = startIndex; objectIndex < endIndex; ++objectIndex)
+                for (std::size_t i = startIndex; i < endIndex; ++i)
                 {
-                    const SceneObject& object = objects[objectIndex];
+                    const SceneObject& object = objects[i];
 
-                    // Build this object's model matrix using its position, rotation and scale
-                    glm::mat4 model{ 1.0f };
-
-                    model = glm::translate(model, object.position);
-                    model = glm::rotate(model, glm::radians(object.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                    model = glm::rotate(model, glm::radians(object.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                    model = glm::rotate(model, glm::radians(object.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-                    model = glm::scale(model, object.scale);
-
-                    // Transform this object's local-space AABB into a world-space AABB using the model matrix
-                    const AABB worldBounds = object.localBounds.Transform(model);
-
-                    // Skip this object if it is outside the camera frustum
-                    if (!frustum.Intersects(worldBounds)) continue;
-
-                    // Store the object in this worker thread's private visibility result list
-                    localVisibleObjects.push_back(&object);
+                    if (IsObjectVisible(object, frustum))
+                    {
+                        localVisibleObjects.push_back(&object);
+                    }
                 }
             }
         );

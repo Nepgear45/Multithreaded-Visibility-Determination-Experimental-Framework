@@ -110,11 +110,15 @@ set(
     src/Visibility/AABB.cpp
     src/Visibility/Frustum.h
     src/Visibility/Frustum.cpp
+    src/Visibility/VisibilityTest.h
+    src/Visibility/VisibilityTest.cpp
 
     src/Visibility/SingleThreadedCuller.h
     src/Visibility/SingleThreadedCuller.cpp
     src/Visibility/MultithreadedCuller.h
     src/Visibility/MultithreadedCuller.cpp
+    src/Visibility/PersistentMultithreadedCuller.h
+    src/Visibility/PersistentMultithreadedCuller.cpp
 
     src/Application/Application.h
     src/Application/Application.cpp

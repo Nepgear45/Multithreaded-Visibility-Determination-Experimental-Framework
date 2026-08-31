@@ -1,63 +1,44 @@
 #include "Scene.h"
 #include <random>
+#include <cmath>
 
-void Scene::GenerateGrid(int countX, int countY, int countZ, float spacing)
+void Scene::GenerateGrid(std::size_t objectCount, float spacing)
 {
-    // Used a fixed seed so the same colours are generated every time
-    std::mt19937 randomGenerator(42);
+    m_objects.clear();
+    m_objects.reserve(objectCount);
 
-    // Avoid very dark colours so objects remain easy to see (0.2 ~ 1.0)
+    // Fixed seed for deterministic colours
+    std::mt19937 randomGenerator(42);
     std::uniform_real_distribution<float> colourDistribution(0.2f, 1.0f);
 
-    m_objects.clear();
+    // Calculate grid size needed to fit all objects
+    const std::size_t gridSize = static_cast<std::size_t>( std::ceil(std::cbrt(static_cast<double>(objectCount))));
 
-    const int totalObjects = countX * countY * countZ;
+    // Centre the grid around the origin
+    const float gridOffset = static_cast<float>(gridSize - 1) * spacing * 0.5f;
 
-    m_objects.reserve(totalObjects);
-
-    const float offsetX = (countX - 1) * spacing * 0.5f;
-    const float offsetY = (countY - 1) * spacing * 0.5f;
-    const float offsetZ = (countZ - 1) * spacing * 0.5f;
-
-    for (int z = 0; z < countZ; ++z)
+    for (std::size_t x = 0; x < gridSize; ++x)
     {
-        for (int y = 0; y < countY; ++y)
+        for (std::size_t y = 0; y < gridSize; ++y)
         {
-            for (int x = 0; x < countX; ++x)
+            for (std::size_t z = 0; z < gridSize; ++z)
             {
+                if (m_objects.size() >= objectCount) return;
+
                 SceneObject object;
 
                 object.position =
                 {
-                    x * spacing - offsetX,
-                    y * spacing - offsetY,
-                    z * spacing - offsetZ
+                    static_cast<float>(x) * spacing - gridOffset,
+                    static_cast<float>(y) * spacing - gridOffset,
+                    static_cast<float>(z) * spacing - gridOffset
                 };
 
-                // Gives each object a deterministic random colour
                 object.colour =
                 {
                     colourDistribution(randomGenerator),
                     colourDistribution(randomGenerator),
                     colourDistribution(randomGenerator)
-                };
-
-                // TEMPORARY TEST:
-                // Stretch every cube along the X axis
-                object.scale =
-                {
-                    1.2f,
-                    1.2f,
-                    1.2f
-                };
-
-                // TEMPORARY TEST:
-                // Rotate every cube 45 degrees around the Y axis
-                object.rotation =
-                {
-                    0.0f,
-                    45.0f,
-                    0.0f
                 };
 
                 m_objects.push_back(object);
