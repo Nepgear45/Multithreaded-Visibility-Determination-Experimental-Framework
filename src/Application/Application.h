@@ -3,6 +3,8 @@
 #include <SDL3/SDL.h>
 #include <cstddef>
 #include <vector>
+#include <filesystem>
+#include <fstream>
 
 #include "Rendering/Shader.h"
 #include "Camera/Camera.h"
@@ -10,6 +12,8 @@
 #include "Visibility/SingleThreadedCuller.h"
 #include "Visibility/MultithreadedCuller.h"
 #include "Visibility/PersistentMultithreadedCuller.h"
+
+using Clock = std::chrono::steady_clock;
 
 enum class CameraMode {Static, Freecam};
 enum class CullingMode {SingleThreaded, Multithreaded, PersistentMultithreaded};
@@ -21,6 +25,14 @@ struct BenchmarkConfiguration
     CullingMode cullingMode;
     std::size_t objectCount;
     std::size_t threadCount;
+};
+
+struct BenchmarkSample
+{
+    std::size_t sampleIndex = 0;
+    double cullingTimeMs = 0.0;
+    double frameTimeMs = 0.0;
+    std::size_t visibleObjectCount = 0;
 };
 
 class Application
@@ -72,20 +84,26 @@ public:
     std::size_t m_currentWarmupFrame = 0;
     std::size_t m_warmupFramesPerBenchmarkTest = 300;
 
+    std::vector<BenchmarkSample> m_benchmarkSamples;
+
+    // Benchmark output
+    std::ofstream m_benchmarkOutputFile;
+    std::filesystem::path m_benchmarkOutputPath;
+
+    bool OpenBenchmarkOutputFile();
+    void WriteBenchmarkSamples();
+
     void StartBenchmark();
     void StopBenchmark();
     void BuildBenchmarkConfigurations();
     void ApplyBenchmarkConfiguration();
-    void UpdateBenchmark(const Frustum& frustum);
+    void UpdateBenchmark(const Frustum& frustum, std::size_t visibleObjectCount);
 
     void RenderBenchmarkUI();
     void PrintBenchmarkConfiguration() const;
     void PrintBenchmarkResults() const;
 
 private:
-    double m_benchmarkCullingTimeTotal = 0.0;
-    double m_benchmarkFrameTimeTotal = 0.0;
-
     void ProcessEvents();
     void Update();
     void Render();

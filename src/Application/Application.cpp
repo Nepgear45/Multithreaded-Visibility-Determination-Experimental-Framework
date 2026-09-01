@@ -17,6 +17,10 @@
 #include <string>
 #include <limits>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 struct ResolutionPreset
 {
@@ -445,7 +449,7 @@ void Application::Render()
     if (m_benchmarkAbortRequested) StopBenchmark();
 
     // Start measuring total frame time
-    const auto frameStartTime = std::chrono::high_resolution_clock::now();
+    const auto frameStartTime = Clock::now();
 
     // Get Object Count
     const std::size_t totalObjects = m_scene.GetObjects().size();
@@ -474,7 +478,7 @@ void Application::Render()
     // --------------------------------------------- Culling starts ---------------------------------------------
 
     // Start measuring visibility determination time
-    const auto cullingStartTime = std::chrono::high_resolution_clock::now();
+    const auto cullingStartTime = Clock::now();
 
     // Run the currently selected visibility determination method
     if (m_cullingMode == CullingMode::SingleThreaded)
@@ -508,7 +512,7 @@ void Application::Render()
 }
 
     // Finish measuring visibility determination time
-    const auto cullingEndTime = std::chrono::high_resolution_clock::now();
+    const auto cullingEndTime = Clock::now();
 
     // Convert the culling time into milliseconds
     m_cullingTimeMs = std::chrono::duration<double, std::milli>(cullingEndTime - cullingStartTime).count();
@@ -550,7 +554,7 @@ void Application::Render()
     glBindVertexArray(0);
 
     // Finish measuring total frame time
-    const auto frameEndTime = std::chrono::high_resolution_clock::now();
+    const auto frameEndTime = Clock::now();
 
     // Convert the frame time into milliseconds
     m_frameTimeMs = std::chrono::duration<double, std::milli>(frameEndTime - frameStartTime).count();
@@ -559,7 +563,7 @@ void Application::Render()
     if (m_frameTimeMs > 0.0) m_fps = 1000.0 / m_frameTimeMs;
 
     // Benchmark run
-    if (m_benchmarkRunning) UpdateBenchmark(frustum);
+    if (m_benchmarkRunning) UpdateBenchmark(frustum, visibleObjects);
 
     // Run requested culling validation outside normal performance measurements
     if (m_validationRequested)
@@ -1020,6 +1024,9 @@ void Application::StopBenchmark()
     m_benchmarkRunning = false;
     m_benchmarkAbortRequested = false;
 
+    if (m_benchmarkOutputFile.is_open()) m_benchmarkOutputFile.close();    
+    if (!m_benchmarkOutputPath.empty()) std::cout << "Benchmark output: " << m_benchmarkOutputPath << '\n';
+
     if (m_cameraMode == CameraMode::Freecam) SDL_SetWindowRelativeMouseMode(m_window, true);
 
     std::cout << "Benchmark stopped.\n";
@@ -1088,7 +1095,7 @@ void Application::BuildBenchmarkConfigurations()
 {
     m_benchmarkConfigurations.clear();
 
-    
+    /*
     constexpr std::size_t objectCounts[] =
     {
         100,
@@ -1108,19 +1115,19 @@ void Application::BuildBenchmarkConfigurations()
         16,
         32
     };
-    
+    */
 
-    /*
+    
     constexpr std::size_t objectCounts[] =
     {
-        100
+        300
     };
 
     constexpr std::size_t threadCounts[] =
     {
         2
     };
-    */
+    
 
     for (const std::size_t objectCount : objectCounts)
     {
@@ -1148,6 +1155,8 @@ void Application::StartBenchmark()
     BuildBenchmarkConfigurations();
 
     if (m_benchmarkConfigurations.empty()) return;
+
+    if (!OpenBenchmarkOutputFile()) return;
 
     m_benchmarkRunning = true;
     m_benchmarkAbortRequested = false;
@@ -1179,9 +1188,11 @@ void Application::ApplyBenchmarkConfiguration()
 
     // Reset benchmark measurements
     m_currentBenchmarkSample = 0;
-    m_benchmarkCullingTimeTotal = 0.0;
-    m_benchmarkFrameTimeTotal = 0.0;
     m_currentWarmupFrame = 0;
+    m_benchmarkSamples.clear();
+
+    // Using .reserve because it is predetermined
+    m_benchmarkSamples.reserve(m_samplesPerBenchmarkTest);
 
     m_benchmarkPhase = BenchmarkPhase::Validation;
 
@@ -1211,22 +1222,48 @@ void Application::PrintBenchmarkConfiguration() const
 
 void Application::PrintBenchmarkResults() const
 {
-    if (m_currentBenchmarkSample == 0) return;
+    if (m_benchmarkSamples.empty()) return;
 
-    const double averageCullingTime = m_benchmarkCullingTimeTotal / static_cast<double>(m_currentBenchmarkSample);
-    const double averageFrameTime = m_benchmarkFrameTimeTotal / static_cast<double>(m_currentBenchmarkSample);
+    double cullingTimeTotal = 0.0;
+    double frameTimeTotal = 0.0;
+
+    for (const BenchmarkSample& sample : m_benchmarkSamples)
+    {
+        cullingTimeTotal += sample.cullingTimeMs;
+        frameTimeTotal += sample.frameTimeMs;
+    }
+
+    const double averageCullingTime = cullingTimeTotal / static_cast<double>(m_benchmarkSamples.size());
+    const double averageFrameTime = frameTimeTotal / static_cast<double>(m_benchmarkSamples.size());
     const double averageFPS = averageFrameTime > 0.0 ? 1000.0 / averageFrameTime : 0.0;
+
+    const std::size_t expectedVisibleCount = m_benchmarkSamples.front().visibleObjectCount;
+
+    bool visibleCountStable = true;
+
+    for (const BenchmarkSample& sample : m_benchmarkSamples)
+    {
+        if (sample.visibleObjectCount != expectedVisibleCount)
+        {
+            visibleCountStable = false;
+            break;
+        }
+    }
 
     std::cout << "========================================\n";
     std::cout << "Test Complete\n";
-    std::cout << "Samples:              " << m_currentBenchmarkSample << '\n';
+    std::cout << "Samples:              " << m_benchmarkSamples.size() << '\n';
+    std::cout << "First Sample:         " << m_benchmarkSamples.front().sampleIndex << '\n';
+    std::cout << "Last Sample:          " << m_benchmarkSamples.back().sampleIndex << '\n';
     std::cout << "Average Culling Time: " << averageCullingTime << " ms\n";
     std::cout << "Average Frame Time:   " << averageFrameTime << " ms\n";
     std::cout << "Average FPS:          " << averageFPS << '\n';
+    std::cout << "Visible Objects:      " << expectedVisibleCount << '\n';
+    std::cout << "Visibility Stable:    " << (visibleCountStable ? "Yes" : "NO") << '\n';
     std::cout << "========================================\n";
 }
 
-void Application::UpdateBenchmark(const Frustum& frustum)
+void Application::UpdateBenchmark(const Frustum& frustum, std::size_t visibleObjectCount)
 {
     if (!m_benchmarkRunning) return;
 
@@ -1269,14 +1306,20 @@ void Application::UpdateBenchmark(const Frustum& frustum)
     // Record the current frame
     if (m_benchmarkPhase == BenchmarkPhase::Measurement)
     {
-        m_benchmarkCullingTimeTotal += m_cullingTimeMs;
-        m_benchmarkFrameTimeTotal += m_frameTimeMs;
+        BenchmarkSample sample;
+        sample.sampleIndex = m_currentBenchmarkSample + 1;
+        sample.cullingTimeMs = m_cullingTimeMs;
+        sample.frameTimeMs = m_frameTimeMs;
+        sample.visibleObjectCount = visibleObjectCount;
 
+        m_benchmarkSamples.push_back(sample);
         m_currentBenchmarkSample++;
 
         if (m_currentBenchmarkSample >= m_samplesPerBenchmarkTest)
         {
             PrintBenchmarkResults();
+            WriteBenchmarkSamples();
+
             m_currentBenchmarkTest++;
 
             // Finish after the final configuration
@@ -1292,4 +1335,79 @@ void Application::UpdateBenchmark(const Frustum& frustum)
 
         return;
     }
+}
+
+bool Application::OpenBenchmarkOutputFile()
+{
+    const std::filesystem::path outputDirectory = "results/raw";
+
+    std::filesystem::create_directories(outputDirectory);
+
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+
+    std::tm localTime{};
+    
+    // Tracy doc
+#ifdef _WIN32
+    localtime_s(&localTime, &currentTime);
+#else
+    localtime_r(&currentTime, &localTime);
+#endif
+
+    std::ostringstream fileName;
+
+    fileName << "benchmark_" << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S") << ".csv";
+
+    m_benchmarkOutputPath = outputDirectory / fileName.str();
+    m_benchmarkOutputFile.open(m_benchmarkOutputPath);
+
+    if (!m_benchmarkOutputFile.is_open())
+    {
+        std::cerr << "Failed to create benchmark output file: " << m_benchmarkOutputPath << '\n';
+        return false;
+    }
+
+    m_benchmarkOutputFile
+        << "test_index,"
+        << "sample_index,"
+        << "implementation,"
+        << "object_count,"
+        << "worker_threads,"
+        << "visible_objects,"
+        << "culling_time_ms,"
+        << "frame_time_ms\n";
+
+    return true;
+}
+
+void Application::WriteBenchmarkSamples()
+{
+    if (!m_benchmarkOutputFile.is_open()) return;
+    if (m_currentBenchmarkTest >= m_benchmarkConfigurations.size()) return;
+
+    const BenchmarkConfiguration& configuration = m_benchmarkConfigurations[m_currentBenchmarkTest];
+
+    const char* implementation = "Unknown";
+    
+    if (configuration.cullingMode == CullingMode::SingleThreaded) implementation = "SingleThreaded";
+    else if (configuration.cullingMode == CullingMode::Multithreaded) implementation = "BasicMultithreaded";
+    else if (configuration.cullingMode == CullingMode::PersistentMultithreaded) implementation = "PersistentMultithreaded";
+
+    m_benchmarkOutputFile << std::fixed << std::setprecision(6);
+
+    for (const BenchmarkSample& sample : m_benchmarkSamples)
+    {
+        m_benchmarkOutputFile
+            << m_currentBenchmarkTest + 1 << ','
+            << sample.sampleIndex << ','
+            << implementation << ','
+            << configuration.objectCount << ','
+            << configuration.threadCount << ','
+            << sample.visibleObjectCount << ','
+            << sample.cullingTimeMs << ','
+            << sample.frameTimeMs << '\n';
+    }
+
+    m_benchmarkOutputFile.flush();
 }

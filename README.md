@@ -61,6 +61,8 @@ The framework is being developed as part of a research project comparing single-
 | `F4`        | Cycle object-count preset                      |
 | `F5`        | Run culling correctness validation             |
 | `F6`        | Cycle resolution preset                        |
+| `F7`        | Start benchmarking                             |
+| `F8`        | Abort benchmarking                             |
 | `F10`       | Show / hide shortcut overlay                   |
 
 ### Runtime Interface
