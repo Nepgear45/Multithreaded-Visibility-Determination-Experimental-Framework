@@ -69,6 +69,9 @@ public:
     std::size_t m_currentBenchmarkSample = 0;
     std::size_t m_samplesPerBenchmarkTest = 1000;
 
+    std::size_t m_currentWarmupFrame = 0;
+    std::size_t m_warmupFramesPerBenchmarkTest = 300;
+
     void StartBenchmark();
     void StopBenchmark();
     void BuildBenchmarkConfigurations();
@@ -77,6 +80,7 @@ public:
 
     void RenderBenchmarkUI();
     void PrintBenchmarkConfiguration() const;
+    void PrintBenchmarkResults() const;
 
 private:
     double m_benchmarkCullingTimeTotal = 0.0;

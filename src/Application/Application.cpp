@@ -50,6 +50,10 @@ namespace
     constexpr std::size_t ObjectCountPresetCount = sizeof(ObjectCountPresets) / sizeof(ObjectCountPresets[0]);
 }
 
+constexpr glm::vec3 BenchmarkCameraPosition(0.0f, 15.0f, 35.0f);
+constexpr glm::vec3 BenchmarkCameraTarget(0.0f, 0.0f, 0.0f);
+constexpr glm::vec3 BenchmarkCameraUp(0.0f, 1.0f, 0.0f);
+
 Application::Application()
 {
 
@@ -298,11 +302,8 @@ bool Application::Initialise()
     // Scene generation
     RegenerateScene();
 
-    // Enable VSync
-    if (!SDL_GL_SetSwapInterval(1))
-    {
-        std::cerr << "Warning: VSync could not be enabled: " << SDL_GetError() << '\n';
-    }
+    // Disable VSync
+    if (!SDL_GL_SetSwapInterval(0)) std::cerr << "Warning: VSync could not be disabled: " << SDL_GetError() << '\n';
 
     // Disable mouse hitting the edge of the window
     SDL_SetWindowRelativeMouseMode(m_window, true);
@@ -454,7 +455,8 @@ void Application::Render()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Calculate camera matrices
-    const glm::mat4 view = m_camera.GetViewMatrix();
+    // Calculate camera matrices
+    const glm::mat4 view = m_benchmarkRunning ? glm::lookAt(BenchmarkCameraPosition, BenchmarkCameraTarget, BenchmarkCameraUp) : m_camera.GetViewMatrix();
     const glm::mat4 projection = glm::perspective
     (
         glm::radians(60.0f),
@@ -1018,6 +1020,8 @@ void Application::StopBenchmark()
     m_benchmarkRunning = false;
     m_benchmarkAbortRequested = false;
 
+    if (m_cameraMode == CameraMode::Freecam) SDL_SetWindowRelativeMouseMode(m_window, true);
+
     std::cout << "Benchmark stopped.\n";
 }
 
@@ -1036,6 +1040,12 @@ void Application::RenderBenchmarkUI()
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings;
 
+    const char* benchmarkPhase = "Unknown";
+
+    if (m_benchmarkPhase == BenchmarkPhase::Validation) benchmarkPhase = "Validation";
+    else if (m_benchmarkPhase == BenchmarkPhase::Warmup) benchmarkPhase = "Warm-up";
+    else if (m_benchmarkPhase == BenchmarkPhase::Measurement) benchmarkPhase = "Measurement";
+
     ImGui::Begin("Benchmark", nullptr, windowFlags);
 
     ImGui::Text("Status: Running");
@@ -1052,11 +1062,13 @@ void Application::RenderBenchmarkUI()
         "Persistent Multithreaded"
     };
 
+    ImGui::Text("Phase:  %s", benchmarkPhase);
     ImGui::Text("Test:            %zu / %zu", m_currentBenchmarkTest + 1, m_benchmarkConfigurations.size());
     ImGui::Text("Implementation:  %s", cullingModeLabels[static_cast<int>(configuration.cullingMode)]);
     ImGui::Text("Objects:         %zu", configuration.objectCount);
     ImGui::Text("Worker Threads:  %zu", configuration.threadCount);
-    ImGui::Text("Sample:          %zu / %zu", m_currentBenchmarkSample, m_samplesPerBenchmarkTest);
+    if (m_benchmarkPhase == BenchmarkPhase::Warmup) ImGui::Text("Warm-up Frame:   %zu / %zu", m_currentWarmupFrame, m_warmupFramesPerBenchmarkTest);
+    else if (m_benchmarkPhase == BenchmarkPhase::Measurement) ImGui::Text("Sample:          %zu / %zu", m_currentBenchmarkSample, m_samplesPerBenchmarkTest);
 
     ImGui::Spacing();
 
@@ -1076,6 +1088,7 @@ void Application::BuildBenchmarkConfigurations()
 {
     m_benchmarkConfigurations.clear();
 
+    
     constexpr std::size_t objectCounts[] =
     {
         100,
@@ -1095,6 +1108,19 @@ void Application::BuildBenchmarkConfigurations()
         16,
         32
     };
+    
+
+    /*
+    constexpr std::size_t objectCounts[] =
+    {
+        100
+    };
+
+    constexpr std::size_t threadCounts[] =
+    {
+        2
+    };
+    */
 
     for (const std::size_t objectCount : objectCounts)
     {
@@ -1126,6 +1152,8 @@ void Application::StartBenchmark()
     m_benchmarkRunning = true;
     m_benchmarkAbortRequested = false;
 
+    SDL_SetWindowRelativeMouseMode(m_window, false);
+
     m_currentBenchmarkTest = 0;
     m_currentBenchmarkSample = 0;
 
@@ -1153,6 +1181,7 @@ void Application::ApplyBenchmarkConfiguration()
     m_currentBenchmarkSample = 0;
     m_benchmarkCullingTimeTotal = 0.0;
     m_benchmarkFrameTimeTotal = 0.0;
+    m_currentWarmupFrame = 0;
 
     m_benchmarkPhase = BenchmarkPhase::Validation;
 
@@ -1180,6 +1209,23 @@ void Application::PrintBenchmarkConfiguration() const
     std::cout << "========================================\n";
 }
 
+void Application::PrintBenchmarkResults() const
+{
+    if (m_currentBenchmarkSample == 0) return;
+
+    const double averageCullingTime = m_benchmarkCullingTimeTotal / static_cast<double>(m_currentBenchmarkSample);
+    const double averageFrameTime = m_benchmarkFrameTimeTotal / static_cast<double>(m_currentBenchmarkSample);
+    const double averageFPS = averageFrameTime > 0.0 ? 1000.0 / averageFrameTime : 0.0;
+
+    std::cout << "========================================\n";
+    std::cout << "Test Complete\n";
+    std::cout << "Samples:              " << m_currentBenchmarkSample << '\n';
+    std::cout << "Average Culling Time: " << averageCullingTime << " ms\n";
+    std::cout << "Average Frame Time:   " << averageFrameTime << " ms\n";
+    std::cout << "Average FPS:          " << averageFPS << '\n';
+    std::cout << "========================================\n";
+}
+
 void Application::UpdateBenchmark(const Frustum& frustum)
 {
     if (!m_benchmarkRunning) return;
@@ -1190,6 +1236,7 @@ void Application::UpdateBenchmark(const Frustum& frustum)
         return;
     }
 
+    // Validate the current configuration before measuring it
     if (m_benchmarkPhase == BenchmarkPhase::Validation)
     {
         if (!ValidateCullingResults(frustum))
@@ -1200,21 +1247,49 @@ void Application::UpdateBenchmark(const Frustum& frustum)
         }
 
         m_benchmarkPhase = BenchmarkPhase::Warmup;
+
+        std::cout << "Starting warm-up.\n";
         return;
     }
 
+    // Allow the current configuration to settle before measurements
     if (m_benchmarkPhase == BenchmarkPhase::Warmup)
     {
-        // prep needed DO THIS FIRST BECAUSE YES
+        m_currentWarmupFrame++;
+
+        if (m_currentWarmupFrame >= m_warmupFramesPerBenchmarkTest)
+        {
+            m_benchmarkPhase = BenchmarkPhase::Measurement;
+            std::cout << "Warm-up complete. Starting measurement.\n";
+        }
+
         return;
     }
 
+    // Record the current frame
     if (m_benchmarkPhase == BenchmarkPhase::Measurement)
     {
         m_benchmarkCullingTimeTotal += m_cullingTimeMs;
         m_benchmarkFrameTimeTotal += m_frameTimeMs;
+
         m_currentBenchmarkSample++;
 
-        // Test completion needs to be here 
+        if (m_currentBenchmarkSample >= m_samplesPerBenchmarkTest)
+        {
+            PrintBenchmarkResults();
+            m_currentBenchmarkTest++;
+
+            // Finish after the final configuration
+            if (m_currentBenchmarkTest >= m_benchmarkConfigurations.size())
+            {
+                std::cout << "\nBenchmark completed successfully.\n";
+                StopBenchmark();
+                return;
+            }
+
+            ApplyBenchmarkConfiguration();
+        }
+
+        return;
     }
 }

@@ -35,6 +35,15 @@ The framework is being developed as part of a research project comparing single-
 * Culling correctness validation across implementations
 * Configurable window resolution presets
 * Keyboard shortcuts for runtime configuration
+* Automated benchmark configuration sequencing
+* Benchmark validation, warm-up and measurement phases
+* Per-test culling correctness validation
+* Deterministic benchmark camera configuration
+* Fixed benchmark resolution
+* Automated benchmark test progression
+* Benchmark progress and configuration interface
+* Per-test average performance reporting
+* Benchmark abort controls
 
 ## Camera Controls
 | Input       | Action                                         |
