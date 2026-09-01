@@ -16,6 +16,23 @@
 #include <thread>
 #include <string>
 #include <limits>
+#include <algorithm>
+
+struct ResolutionPreset
+{
+    int width;
+    int height;
+    const char* label;
+};
+
+constexpr ResolutionPreset ResolutionPresets[] =
+{
+    { 1280, 720,  "1280 x 720" },
+    { 1600, 900,  "1600 x 900" },
+    { 1920, 1080, "1920 x 1080" },
+    { 2560, 1440, "2560 x 1440" },
+    { 3840, 2160, "3840 x 2160" }
+};
 
 namespace
 {
@@ -376,6 +393,11 @@ void Application::ProcessEvents()
             // F4 - Cycle through the object presets
             if (event.key.scancode == SDL_SCANCODE_F4 && !event.key.repeat) CycleObjectCountPreset();
 
+            // F5 - Validate culling results
+            if (event.key.scancode == SDL_SCANCODE_F5 && !event.key.repeat) m_validationRequested = true;
+
+            // F6 - Cycle resolution
+            if (event.key.scancode == SDL_SCANCODE_F6 && !event.key.repeat) CycleResolution();
 
             // F10 - Toggle shortcuts
             if (event.key.scancode == SDL_SCANCODE_F10 && !event.key.repeat) m_showShortcuts = !m_showShortcuts;
@@ -520,6 +542,13 @@ void Application::Render()
 
     // Calculate frames per second from the frame time
     if (m_frameTimeMs > 0.0) m_fps = 1000.0 / m_frameTimeMs;
+
+    // Run requested culling validation outside normal performance measurements
+    if (m_validationRequested)
+    {
+        ValidateCullingResults(frustum);
+        m_validationRequested = false;
+    }
 
     // Start a new Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
@@ -756,6 +785,50 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
 
     ImGui::Spacing();
 
+    ImGui::Text("Culling Validation");
+    ImGui::Separator();
+
+    ImGui::Spacing();
+
+    ImGui::Text("Culling Validation");
+    ImGui::Separator();
+
+    if (!m_hasValidationResult) ImGui::Text("Last Result:    Not Run");
+    else
+    {
+        ImGui::Text("Last Result:    %s", m_cullingResultsMatch ? "Match" : "MISMATCH");
+        ImGui::Text("Objects Tested: %zu", m_validationObjectCount);
+        ImGui::Text("Single Thread:  %zu", m_validationSingleVisible);
+        ImGui::Text("Basic MT:       %zu", m_validationBasicVisible);
+        ImGui::Text("Persistent MT:  %zu", m_validationPersistentVisible);
+    }
+
+    ImGui::Spacing();
+
+    ImGui::Text("Display Configuration");
+    ImGui::Separator();
+
+    const char* resolutionLabels[] =
+    {
+        "1280 x 720",
+        "1600 x 900",
+        "1920 x 1080",
+        "2560 x 1440",
+        "3840 x 2160"
+    };
+
+    ImGui::Text("Resolution:");
+    ImGui::SameLine(180.0f);
+    ImGui::SetNextItemWidth(200.0f);
+
+    if (ImGui::Combo("##Resolution", &m_resolutionIndex, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
+    {
+        const ResolutionPreset& resolution = ResolutionPresets[m_resolutionIndex];
+        SetWindowResolution(resolution.width, resolution.height);
+    }
+
+    ImGui::Spacing();
+
     ImGui::Text("Performance");
     ImGui::Separator();
 
@@ -843,7 +916,62 @@ void Application::RenderShortcutsOverlay()
     ImGui::Text("F2   Cycle Worker Threads");
     ImGui::Text("F3   Cycle Culling Implementation");
     ImGui::Text("F4   Cycle Object Count Preset");
+    ImGui::Text("F5   Validate Culling Results");
+    ImGui::Text("F6   Cycle Resolution");
     ImGui::Text("F10  Hide Shortcuts");
 
     ImGui::End();
+}
+
+void Application::ValidateCullingResults(const Frustum& frustum)
+{
+    std::vector<const SceneObject*> singleThreadedResults;
+    std::vector<const SceneObject*> basicMultithreadedResults;
+    std::vector<const SceneObject*> persistentMultithreadedResults;
+
+    // Run all culling implementations
+    m_singleThreadedCuller.Cull(m_scene.GetObjects(), frustum, singleThreadedResults);
+    m_multithreadedCuller.Cull(m_scene.GetObjects(), frustum, basicMultithreadedResults, m_threadCount);
+    m_persistentMultithreadedCuller.Cull(m_scene.GetObjects(), frustum, persistentMultithreadedResults, m_threadCount);
+
+    // Sort results so execution order does not affect comparison
+    std::sort(singleThreadedResults.begin(), singleThreadedResults.end());
+    std::sort(basicMultithreadedResults.begin(), basicMultithreadedResults.end());
+    std::sort(persistentMultithreadedResults.begin(), persistentMultithreadedResults.end());
+
+    // Store diagnostic information
+    m_validationSingleVisible = singleThreadedResults.size();
+    m_validationBasicVisible = basicMultithreadedResults.size();
+    m_validationPersistentVisible = persistentMultithreadedResults.size();
+    m_validationObjectCount = m_scene.GetObjects().size();
+
+    // All implementations must return exactly the same objects
+    m_cullingResultsMatch = singleThreadedResults == basicMultithreadedResults && singleThreadedResults == persistentMultithreadedResults;
+    m_hasValidationResult = true;
+
+    if (m_cullingResultsMatch) std::cout << "Culling validation passed: all implementations match.\n";
+    else
+    {
+        std::cout << "Culling validation failed.\n";
+        std::cout << "Single Thread: " << m_validationSingleVisible << '\n';
+        std::cout << "Basic Multithreaded: " << m_validationBasicVisible << '\n';
+        std::cout << "Persistent Multithreaded: " << m_validationPersistentVisible << '\n';
+    }
+}
+
+void Application::SetWindowResolution(int width, int height)
+{
+    m_windowWidth = width;
+    m_windowHeight = height;
+    SDL_SetWindowSize(m_window, m_windowWidth, m_windowHeight);
+    glViewport(0, 0, m_windowWidth, m_windowHeight);
+}
+
+void Application::CycleResolution()
+{
+    m_resolutionIndex++;
+    if (m_resolutionIndex >= static_cast<int>(std::size(ResolutionPresets))) m_resolutionIndex = 0; // std::size is comfy
+
+    const ResolutionPreset& resolution = ResolutionPresets[m_resolutionIndex];
+    SetWindowResolution(resolution.width, resolution.height);
 }

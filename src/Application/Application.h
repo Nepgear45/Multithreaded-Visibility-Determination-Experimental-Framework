@@ -81,6 +81,10 @@ private:
 
     int m_windowWidth = 1920;
     int m_windowHeight = 1080;
+    int m_resolutionIndex = 2;
+
+    void SetWindowResolution(int width, int height);
+    void CycleResolution();
 
     void UpdateWindowTitle(std::size_t visibleObjects,std::size_t totalObjects);
     void RenderPerformanceOverlay(std::size_t visibleObjects,std::size_t totalObjects);
@@ -88,5 +92,16 @@ private:
     void CycleThreadCount();
     void CycleCullingMode();
     void CycleObjectCountPreset();
-    void RenderShortcutsOverlay();    
+    void RenderShortcutsOverlay();
+
+    bool m_validationRequested = false;
+    bool m_hasValidationResult = false;
+    bool m_cullingResultsMatch = false;
+
+    std::size_t m_validationSingleVisible = 0;
+    std::size_t m_validationBasicVisible = 0;
+    std::size_t m_validationPersistentVisible = 0;
+    std::size_t m_validationObjectCount = 0;
+
+    void ValidateCullingResults(const Frustum& frustum);
 };
