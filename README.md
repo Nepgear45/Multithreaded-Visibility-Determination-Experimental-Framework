@@ -32,6 +32,9 @@ The framework is being developed as part of a research project comparing single-
 * Runtime scene configuration
 * Real-time visibility statistics
 * Real-time culling time, frame time and FPS measurements
+* Culling correctness validation across implementations
+* Configurable window resolution presets
+* Keyboard shortcuts for runtime configuration
 
 ## Camera Controls
 | Input       | Action                                         |
@@ -47,6 +50,8 @@ The framework is being developed as part of a research project comparing single-
 | `F2`        | Cycle worker thread count                      |
 | `F3`        | Cycle culling implementation                   |
 | `F4`        | Cycle object-count preset                      |
+| `F5`        | Run culling correctness validation             |
+| `F6`        | Cycle resolution preset                        |
 | `F10`       | Show / hide shortcut overlay                   |
 
 ### Runtime Interface
@@ -128,11 +133,11 @@ The culling configuration can be changed at runtime to compare the dedicated sin
 
 ## Build
 The project uses CMake. CMake automatically downloads project dependancies and manages them using FetchContent. These dependencies include:
-* SDL3
-* GLM
-* GLAD
-* Dear ImGUI
-* Tracy
+* SDL3 3.2.16
+* GLM 1.0.1
+* GLAD 2.0.8
+* Dear ImGUI 1.92.9b
+* Tracy 0.11.1
 
 ### Configure
 From the project root:

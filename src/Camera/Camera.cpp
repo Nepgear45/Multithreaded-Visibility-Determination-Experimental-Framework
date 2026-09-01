@@ -21,12 +21,10 @@ Camera::Camera
     UpdateCameraVectors();
 }
 
-
 glm::mat4 Camera::GetViewMatrix() const
 {
     return glm::lookAt(m_position, m_position + m_front, m_up);
 }
-
 
 void Camera::ProcessKeyboard(CameraMovement direction, float deltaTime)
 {
@@ -61,7 +59,6 @@ void Camera::ProcessKeyboard(CameraMovement direction, float deltaTime)
     }
 }
 
-
 void Camera::ProcessMouseMovement(
     float xOffset,
     float yOffset
@@ -77,24 +74,20 @@ void Camera::ProcessMouseMovement(
     UpdateCameraVectors();
 }
 
-
 void Camera::SetMovementSpeed(float speed)
 {
     m_movementSpeed = speed;
 }
-
 
 void Camera::SetMouseSensitivity(float sensitivity)
 {
     m_mouseSensitivity = sensitivity;
 }
 
-
 const glm::vec3& Camera::GetPosition() const
 {
     return m_position;
 }
-
 
 void Camera::UpdateCameraVectors()
 {
@@ -107,4 +100,13 @@ void Camera::UpdateCameraVectors()
     m_front = glm::normalize(front);
     m_right = glm::normalize(glm::cross(m_front, m_worldUp));
     m_up = glm::normalize(glm::cross(m_right, m_front));
+}
+
+void Camera::SetTransform(const glm::vec3& position, float yaw, float pitch)
+{
+    m_position = position;
+    m_yaw = yaw;
+    m_pitch = std::clamp(pitch, -89.0f, 89.0f);
+
+    UpdateCameraVectors();
 }

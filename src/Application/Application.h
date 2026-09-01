@@ -13,6 +13,15 @@
 
 enum class CameraMode {Static, Freecam};
 enum class CullingMode {SingleThreaded, Multithreaded, PersistentMultithreaded};
+enum class BenchmarkState {Inactive, Running};
+enum class BenchmarkPhase {Validation, Warmup, Measurement};
+
+struct BenchmarkConfiguration
+{
+    CullingMode cullingMode;
+    std::size_t objectCount;
+    std::size_t threadCount;
+};
 
 class Application
 {
@@ -46,7 +55,33 @@ public:
 
     CullingMode m_cullingMode = CullingMode::SingleThreaded;
 
+    // Benchmark variables
+    BenchmarkState m_benchmarkState = BenchmarkState::Inactive;
+
+    bool m_benchmarkRunning = false;
+    bool m_benchmarkAbortRequested = false;
+
+    std::vector<BenchmarkConfiguration> m_benchmarkConfigurations;
+    BenchmarkPhase m_benchmarkPhase = BenchmarkPhase::Validation;
+
+    std::size_t m_totalBenchmarkTests = 0;
+    std::size_t m_currentBenchmarkTest = 0;
+    std::size_t m_currentBenchmarkSample = 0;
+    std::size_t m_samplesPerBenchmarkTest = 1000;
+
+    void StartBenchmark();
+    void StopBenchmark();
+    void BuildBenchmarkConfigurations();
+    void ApplyBenchmarkConfiguration();
+    void UpdateBenchmark(const Frustum& frustum);
+
+    void RenderBenchmarkUI();
+    void PrintBenchmarkConfiguration() const;
+
 private:
+    double m_benchmarkCullingTimeTotal = 0.0;
+    double m_benchmarkFrameTimeTotal = 0.0;
+
     void ProcessEvents();
     void Update();
     void Render();
@@ -103,5 +138,5 @@ private:
     std::size_t m_validationPersistentVisible = 0;
     std::size_t m_validationObjectCount = 0;
 
-    void ValidateCullingResults(const Frustum& frustum);
+    bool ValidateCullingResults(const Frustum& frustum);
 };

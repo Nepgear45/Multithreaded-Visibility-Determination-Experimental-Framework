@@ -31,6 +31,8 @@ public:
     void SetMovementSpeed(float speed);
     void SetMouseSensitivity(float sensitivity);
 
+    void SetTransform(const glm::vec3& position, float yaw, float pitch);
+
     const glm::vec3& GetPosition() const;
 
 private:

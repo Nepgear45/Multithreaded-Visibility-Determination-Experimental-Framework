@@ -356,7 +356,7 @@ void Application::ProcessEvents()
 
         if (event.type == SDL_EVENT_MOUSE_MOTION)
         {
-            if (m_cameraMode == CameraMode::Freecam)
+            if (m_cameraMode == CameraMode::Freecam && !m_benchmarkRunning)
             {
                 const float xOffset = event.motion.xrel;
                 const float yOffset = -event.motion.yrel;
@@ -367,6 +367,12 @@ void Application::ProcessEvents()
 
         if (event.type == SDL_EVENT_KEY_DOWN)
         {
+            // F8 - Abort benchmark
+            if (event.key.scancode == SDL_SCANCODE_F8 && !event.key.repeat && m_benchmarkRunning) m_benchmarkAbortRequested = true;
+
+            // Lock normal controls while benchmarking
+            if (m_benchmarkRunning) continue;
+
             // F1 - Toggle freecam
             if (event.key.scancode == SDL_SCANCODE_F1 && !event.key.repeat)
             {
@@ -399,6 +405,9 @@ void Application::ProcessEvents()
             // F6 - Cycle resolution
             if (event.key.scancode == SDL_SCANCODE_F6 && !event.key.repeat) CycleResolution();
 
+            // F7 - Start benchmark
+            if (event.key.scancode == SDL_SCANCODE_F7 && !event.key.repeat) StartBenchmark();
+
             // F10 - Toggle shortcuts
             if (event.key.scancode == SDL_SCANCODE_F10 && !event.key.repeat) m_showShortcuts = !m_showShortcuts;
         }
@@ -408,6 +417,7 @@ void Application::ProcessEvents()
 void Application::Update()
 {
     if (m_cameraMode != CameraMode::Freecam) return;
+    if (m_benchmarkRunning) return;
 
     const bool* keyboardState = SDL_GetKeyboardState(nullptr);
 
@@ -430,6 +440,9 @@ void Application::Update()
 
 void Application::Render()
 {
+    // Process benchmark request cancel
+    if (m_benchmarkAbortRequested) StopBenchmark();
+
     // Start measuring total frame time
     const auto frameStartTime = std::chrono::high_resolution_clock::now();
 
@@ -543,6 +556,9 @@ void Application::Render()
     // Calculate frames per second from the frame time
     if (m_frameTimeMs > 0.0) m_fps = 1000.0 / m_frameTimeMs;
 
+    // Benchmark run
+    if (m_benchmarkRunning) UpdateBenchmark(frustum);
+
     // Run requested culling validation outside normal performance measurements
     if (m_validationRequested)
     {
@@ -556,8 +572,12 @@ void Application::Render()
     ImGui::NewFrame();
 
     // Draw the real-time performance overlay and shortcuts helper
-    RenderPerformanceOverlay(visibleObjects, totalObjects);
-    RenderShortcutsOverlay();
+    if (m_benchmarkRunning) RenderBenchmarkUI();
+    else
+    {
+        RenderPerformanceOverlay(visibleObjects, totalObjects);
+        RenderShortcutsOverlay();
+    }
 
     // Finish building the Dear ImGui frame
     ImGui::Render();
@@ -788,11 +808,6 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
     ImGui::Text("Culling Validation");
     ImGui::Separator();
 
-    ImGui::Spacing();
-
-    ImGui::Text("Culling Validation");
-    ImGui::Separator();
-
     if (!m_hasValidationResult) ImGui::Text("Last Result:    Not Run");
     else
     {
@@ -801,6 +816,21 @@ void Application::RenderPerformanceOverlay(std::size_t visibleObjects, std::size
         ImGui::Text("Single Thread:  %zu", m_validationSingleVisible);
         ImGui::Text("Basic MT:       %zu", m_validationBasicVisible);
         ImGui::Text("Persistent MT:  %zu", m_validationPersistentVisible);
+    }
+
+    ImGui::Spacing();
+
+    ImGui::Text("Benchmark");
+    ImGui::Separator();
+
+    if (!m_benchmarkRunning)
+    {
+        if (ImGui::Button("Start Benchmark")) StartBenchmark();
+    }
+    else
+    {
+        ImGui::Text("Status: Running");
+        if (ImGui::Button("Abort Benchmark")) m_benchmarkAbortRequested = true;
     }
 
     ImGui::Spacing();
@@ -918,12 +948,15 @@ void Application::RenderShortcutsOverlay()
     ImGui::Text("F4   Cycle Object Count Preset");
     ImGui::Text("F5   Validate Culling Results");
     ImGui::Text("F6   Cycle Resolution");
+    ImGui::Text("F7   Start Benchmark");
+    ImGui::Text("F8   Abort Benchmark");
+
     ImGui::Text("F10  Hide Shortcuts");
 
     ImGui::End();
 }
 
-void Application::ValidateCullingResults(const Frustum& frustum)
+bool Application::ValidateCullingResults(const Frustum& frustum)
 {
     std::vector<const SceneObject*> singleThreadedResults;
     std::vector<const SceneObject*> basicMultithreadedResults;
@@ -957,6 +990,8 @@ void Application::ValidateCullingResults(const Frustum& frustum)
         std::cout << "Basic Multithreaded: " << m_validationBasicVisible << '\n';
         std::cout << "Persistent Multithreaded: " << m_validationPersistentVisible << '\n';
     }
+
+    return m_cullingResultsMatch;
 }
 
 void Application::SetWindowResolution(int width, int height)
@@ -974,4 +1009,212 @@ void Application::CycleResolution()
 
     const ResolutionPreset& resolution = ResolutionPresets[m_resolutionIndex];
     SetWindowResolution(resolution.width, resolution.height);
+}
+
+void Application::StopBenchmark()
+{
+    if (!m_benchmarkRunning) return;
+
+    m_benchmarkRunning = false;
+    m_benchmarkAbortRequested = false;
+
+    std::cout << "Benchmark stopped.\n";
+}
+
+void Application::RenderBenchmarkUI()
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 10.0f, viewport->WorkPos.y + 10.0f), ImGuiCond_Always);
+
+    ImGui::SetNextWindowSize(ImVec2(400.0f, 0.0f));
+
+    const ImGuiWindowFlags windowFlags =
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings;
+
+    ImGui::Begin("Benchmark", nullptr, windowFlags);
+
+    ImGui::Text("Status: Running");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    const BenchmarkConfiguration& configuration = m_benchmarkConfigurations[m_currentBenchmarkTest];
+
+    const char* cullingModeLabels[] =
+    {
+        "Single Thread",
+        "Basic Multithreaded",
+        "Persistent Multithreaded"
+    };
+
+    ImGui::Text("Test:            %zu / %zu", m_currentBenchmarkTest + 1, m_benchmarkConfigurations.size());
+    ImGui::Text("Implementation:  %s", cullingModeLabels[static_cast<int>(configuration.cullingMode)]);
+    ImGui::Text("Objects:         %zu", configuration.objectCount);
+    ImGui::Text("Worker Threads:  %zu", configuration.threadCount);
+    ImGui::Text("Sample:          %zu / %zu", m_currentBenchmarkSample, m_samplesPerBenchmarkTest);
+
+    ImGui::Spacing();
+
+    ImGui::Text("Culling Time:    %.3f ms", m_cullingTimeMs);
+    ImGui::Text("Frame Time:      %.3f ms", m_frameTimeMs);
+    ImGui::Text("FPS:             %.1f", m_fps);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    ImGui::TextDisabled("Press F8 to abort benchmark");
+
+    ImGui::End();
+}
+
+void Application::BuildBenchmarkConfigurations()
+{
+    m_benchmarkConfigurations.clear();
+
+    constexpr std::size_t objectCounts[] =
+    {
+        100,
+        500,
+        1000,
+        2500,
+        5000,
+        7500,
+        10000
+    };
+
+    constexpr std::size_t threadCounts[] =
+    {
+        2,
+        4,
+        8,
+        16,
+        32
+    };
+
+    for (const std::size_t objectCount : objectCounts)
+    {
+        // Single-threaded baseline
+        m_benchmarkConfigurations.push_back({CullingMode::SingleThreaded, objectCount, 1});
+
+        // Basic multithreaded
+        for (const std::size_t threadCount : threadCounts)
+        {
+            m_benchmarkConfigurations.push_back({CullingMode::Multithreaded, objectCount, threadCount});
+        }
+
+        // Persistent multithreaded
+        for (const std::size_t threadCount : threadCounts)
+        {
+            m_benchmarkConfigurations.push_back({CullingMode::PersistentMultithreaded, objectCount, threadCount});
+        }
+    }
+}
+
+void Application::StartBenchmark()
+{
+    if (m_benchmarkRunning) return;
+
+    BuildBenchmarkConfigurations();
+
+    if (m_benchmarkConfigurations.empty()) return;
+
+    m_benchmarkRunning = true;
+    m_benchmarkAbortRequested = false;
+
+    m_currentBenchmarkTest = 0;
+    m_currentBenchmarkSample = 0;
+
+    ApplyBenchmarkConfiguration();
+
+    std::cout << "Benchmark started.\n";
+}
+
+void Application::ApplyBenchmarkConfiguration()
+{
+    if (m_currentBenchmarkTest >= m_benchmarkConfigurations.size()) return;
+
+    const BenchmarkConfiguration& configuration = m_benchmarkConfigurations[m_currentBenchmarkTest];
+
+    m_cullingMode = configuration.cullingMode;
+    m_threadCount = configuration.threadCount;
+    m_requestedObjectCount = configuration.objectCount;
+
+    m_resolutionIndex = 2;
+    SetWindowResolution(1920, 1080);
+
+    RegenerateScene();
+
+    // Reset benchmark measurements
+    m_currentBenchmarkSample = 0;
+    m_benchmarkCullingTimeTotal = 0.0;
+    m_benchmarkFrameTimeTotal = 0.0;
+
+    m_benchmarkPhase = BenchmarkPhase::Validation;
+
+    PrintBenchmarkConfiguration();
+}
+
+void Application::PrintBenchmarkConfiguration() const
+{
+    const BenchmarkConfiguration& configuration =
+        m_benchmarkConfigurations[m_currentBenchmarkTest];
+
+    const char* cullingModeLabels[] =
+    {
+        "Single Thread",
+        "Basic Multithreaded",
+        "Persistent Multithreaded"
+    };
+
+    std::cout << "\n";
+    std::cout << "========================================\n";
+    std::cout << "Benchmark Test " << m_currentBenchmarkTest + 1 << " / " << m_benchmarkConfigurations.size() << '\n';
+    std::cout << "Implementation: " << cullingModeLabels[static_cast<int>(configuration.cullingMode)] << '\n';
+    std::cout << "Objects:        " << configuration.objectCount << '\n';
+    std::cout << "Worker Threads: " << configuration.threadCount << '\n';
+    std::cout << "========================================\n";
+}
+
+void Application::UpdateBenchmark(const Frustum& frustum)
+{
+    if (!m_benchmarkRunning) return;
+
+    if (m_benchmarkAbortRequested)
+    {
+        StopBenchmark();
+        return;
+    }
+
+    if (m_benchmarkPhase == BenchmarkPhase::Validation)
+    {
+        if (!ValidateCullingResults(frustum))
+        {
+            std::cout << "Benchmark aborted due to culling validation failure.\n";
+            StopBenchmark();
+            return;
+        }
+
+        m_benchmarkPhase = BenchmarkPhase::Warmup;
+        return;
+    }
+
+    if (m_benchmarkPhase == BenchmarkPhase::Warmup)
+    {
+        // prep needed DO THIS FIRST BECAUSE YES
+        return;
+    }
+
+    if (m_benchmarkPhase == BenchmarkPhase::Measurement)
+    {
+        m_benchmarkCullingTimeTotal += m_cullingTimeMs;
+        m_benchmarkFrameTimeTotal += m_frameTimeMs;
+        m_currentBenchmarkSample++;
+
+        // Test completion needs to be here 
+    }
 }
