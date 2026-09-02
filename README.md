@@ -183,34 +183,188 @@ results/raw/
 ```
 
 ## Build
-The project uses CMake. CMake automatically downloads project dependancies and manages them using FetchContent. These dependencies include:
-* SDL3 3.2.16
-* GLM 1.0.1
-* GLAD 2.0.8
-* Dear ImGUI 1.92.9b
-* Tracy 0.11.1
+
+## Prerequisites
+The following software is required to configure and build the project on Windows.
+
+### 1. Visual Studio 2022
+Install **Visual Studio 2022 Community** or another Visual Studio 2022 edition.
+
+During installation, enable the following workload:
+
+```text
+Desktop development with C++
+```
+
+Make sure the installation includes:
+
+* MSVC C++ build tools
+* Windows 10 or Windows 11 SDK
+* C++ CMake tools for Windows
+
+Visual Studio provides the C and C++ compiler toolchain required by CMake.
+
+### 2. CMake
+Install CMake and make sure it is available from the command line.
+
+Verify the installation with:
+
+```powershell
+cmake --version
+```
+
+### 3. Git
+Git is required because CMake FetchContent downloads project dependencies from Git repositories.
+
+Verify the installation with:
+
+```powershell
+git --version
+```
+
+If Git has just been installed, close and reopen PowerShell or Visual Studio so the updated PATH is detected.
+
+### 4. Python 3.13
+Python 3.13 is required during configuration because GLAD 2.0.8 generates the OpenGL loader source code using Python.
+
+Verify the installation with:
+
+```powershell
+python --version
+```
+
+The project has been developed using Python 3.13.
+
+## Prerequisites
+
+The following software is required to configure and build the project on Windows.
+
+### Visual Studio 2022
+
+Install **Visual Studio 2022 Community** or another Visual Studio 2022 edition.
+
+During installation, enable the following workload:
+
+```text
+Desktop development with C++
+```
+
+Make sure the installation includes:
+
+* MSVC C++ build tools
+* Windows 10 or Windows 11 SDK
+* C++ CMake tools for Windows
+
+### CMake
+
+Install CMake and make sure it is available from PowerShell.
+
+Verify the installation with:
+
+```powershell
+cmake --version
+```
+
+### Git
+
+Git is required because CMake FetchContent downloads project dependencies from Git repositories.
+
+Verify the installation with:
+
+```powershell
+git --version
+```
+
+### Python 3.13
+
+Python 3.13 is required during configuration for GLAD generation.
+
+Verify the installation with:
+
+```powershell
+python --version
+```
+
+### Jinja2
+
+Jinja2 is required by GLAD during OpenGL loader generation.
+
+Install Jinja2 using the same Python 3.13 installation used by CMake:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip install Jinja2
+```
+
+Verify the installation with:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip show Jinja2
+```
+
+## Configure and Build
+
+Open PowerShell and navigate to the project root directory containing `CMakeLists.txt`.
+
+For example:
+
+```powershell
+cd "C:\Path\To\MultithreadedVisibilityFramework"
+```
 
 ### Configure
-From the project root:
+
+Configure the project with:
 
 ```powershell
-cmake -S . -B build
+cmake -S . -B build -DPython_EXECUTABLE="$env:LOCALAPPDATA\Programs\Python\Python313\python.exe"
 ```
 
-Python 3.13.x is specifically required for installation of GLAD 2.0.8:
-
-```powershell
-cmake -S . -B build -DPython_EXECUTABLE="path/to/python.exe"
-```
-
-This explicitly selects the Python 3.13 interpreter used by GLAD during OpenGL source generation.
-
-### Build Debug
-```powershell
-cmake --build build --config Debug
-```
+CMake will configure the project and download the required dependencies using FetchContent.
 
 ### Build Release
+
+After configuration completes successfully, build the Release configuration with:
+
 ```powershell
 cmake --build build --config Release
+```
+
+The Release executable will normally be generated under:
+
+```text
+build\Release\
+```
+
+To locate the executable:
+
+```powershell
+Get-ChildItem -Path build -Recurse -Filter *.exe | Select-Object FullName
+```
+
+Formal benchmark runs should use the Release executable and should be launched without the Visual Studio debugger attached.
+
+### Clean Build
+
+If a configuration fails or the build directory needs to be regenerated, delete it with:
+
+```powershell
+Remove-Item -Recurse -Force build
+```
+
+Then run the configure and Release build commands again:
+
+```powershell
+cmake -S . -B build -DPython_EXECUTABLE="$env:LOCALAPPDATA\Programs\Python\Python313\python.exe"
+cmake --build build --config Release
+```
+
+### Verify Required Tools
+
+Before configuring the project on a new machine, the required tools can be checked with:
+
+```powershell
+cmake --version
+git --version
+python --version
+python -m pip show Jinja2
 ```
