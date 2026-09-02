@@ -14,11 +14,9 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
-#include <string>
 #include <limits>
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
 
@@ -446,7 +444,7 @@ void Application::Update()
 void Application::Render()
 {
     // Process benchmark request cancel
-    if (m_benchmarkAbortRequested) StopBenchmark();
+    if (m_benchmarkAbortRequested) StopBenchmark(false);
 
     // Start measuring total frame time
     const auto frameStartTime = Clock::now();
@@ -1017,7 +1015,7 @@ void Application::CycleResolution()
     SetWindowResolution(resolution.width, resolution.height);
 }
 
-void Application::StopBenchmark()
+void Application::StopBenchmark(bool completed)
 {
     if (!m_benchmarkRunning) return;
 
@@ -1027,9 +1025,9 @@ void Application::StopBenchmark()
     if (m_benchmarkOutputFile.is_open()) m_benchmarkOutputFile.close();    
     if (!m_benchmarkOutputPath.empty()) std::cout << "Benchmark output: " << m_benchmarkOutputPath << '\n';
 
-    if (m_cameraMode == CameraMode::Freecam) SDL_SetWindowRelativeMouseMode(m_window, true);
+    std::cout << (completed ? "Benchmark completed.\n" : "Benchmark aborted.\n");
 
-    std::cout << "Benchmark stopped.\n";
+    if (m_cameraMode == CameraMode::Freecam) SDL_SetWindowRelativeMouseMode(m_window, true);
 }
 
 void Application::RenderBenchmarkUI()
@@ -1095,7 +1093,6 @@ void Application::BuildBenchmarkConfigurations()
 {
     m_benchmarkConfigurations.clear();
 
-    /*
     constexpr std::size_t objectCounts[] =
     {
         100,
@@ -1115,9 +1112,8 @@ void Application::BuildBenchmarkConfigurations()
         16,
         32
     };
-    */
 
-    
+    /*
     constexpr std::size_t objectCounts[] =
     {
         300
@@ -1127,7 +1123,7 @@ void Application::BuildBenchmarkConfigurations()
     {
         2
     };
-    
+    */
 
     for (const std::size_t objectCount : objectCounts)
     {
@@ -1165,6 +1161,15 @@ void Application::StartBenchmark()
 
     m_currentBenchmarkTest = 0;
     m_currentBenchmarkSample = 0;
+
+    std::cout << "\n";
+    std::cout << "========================================\n";
+    std::cout << "Benchmark Run\n";
+    std::cout << "Run ID:          " << m_benchmarkRunId << '\n';
+    std::cout << "Warm-up Frames:  " << m_warmupFramesPerBenchmarkTest << '\n';
+    std::cout << "Samples/Test:    " << m_samplesPerBenchmarkTest << '\n';
+    std::cout << "Configurations:  " << m_benchmarkConfigurations.size() << '\n';
+    std::cout << "========================================\n";
 
     ApplyBenchmarkConfiguration();
 
@@ -1269,7 +1274,7 @@ void Application::UpdateBenchmark(const Frustum& frustum, std::size_t visibleObj
 
     if (m_benchmarkAbortRequested)
     {
-        StopBenchmark();
+        StopBenchmark(false);
         return;
     }
 
@@ -1279,7 +1284,7 @@ void Application::UpdateBenchmark(const Frustum& frustum, std::size_t visibleObj
         if (!ValidateCullingResults(frustum))
         {
             std::cout << "Benchmark aborted due to culling validation failure.\n";
-            StopBenchmark();
+            StopBenchmark(false);
             return;
         }
 
@@ -1326,7 +1331,7 @@ void Application::UpdateBenchmark(const Frustum& frustum, std::size_t visibleObj
             if (m_currentBenchmarkTest >= m_benchmarkConfigurations.size())
             {
                 std::cout << "\nBenchmark completed successfully.\n";
-                StopBenchmark();
+                StopBenchmark(true);
                 return;
             }
 
@@ -1347,19 +1352,17 @@ bool Application::OpenBenchmarkOutputFile()
     const std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
 
     std::tm localTime{};
-    
-    // Tracy doc
+
 #ifdef _WIN32
     localtime_s(&localTime, &currentTime);
 #else
     localtime_r(&currentTime, &localTime);
 #endif
 
-    std::ostringstream fileName;
-
-    fileName << "benchmark_" << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S") << ".csv";
-
-    m_benchmarkOutputPath = outputDirectory / fileName.str();
+    std::ostringstream runId;
+    runId << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S");
+    m_benchmarkRunId = runId.str();
+    m_benchmarkOutputPath = outputDirectory / ("benchmark_" + m_benchmarkRunId + ".csv");
     m_benchmarkOutputFile.open(m_benchmarkOutputPath);
 
     if (!m_benchmarkOutputFile.is_open())

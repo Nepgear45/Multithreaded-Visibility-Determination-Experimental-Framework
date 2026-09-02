@@ -5,6 +5,7 @@
 #include <vector>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "Rendering/Shader.h"
 #include "Camera/Camera.h"
@@ -89,12 +90,13 @@ public:
     // Benchmark output
     std::ofstream m_benchmarkOutputFile;
     std::filesystem::path m_benchmarkOutputPath;
+    std::string m_benchmarkRunId;
 
     bool OpenBenchmarkOutputFile();
     void WriteBenchmarkSamples();
 
     void StartBenchmark();
-    void StopBenchmark();
+    void StopBenchmark(bool completed);
     void BuildBenchmarkConfigurations();
     void ApplyBenchmarkConfiguration();
     void UpdateBenchmark(const Frustum& frustum, std::size_t visibleObjectCount);

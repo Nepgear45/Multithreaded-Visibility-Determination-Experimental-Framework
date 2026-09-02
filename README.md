@@ -42,8 +42,13 @@ The framework is being developed as part of a research project comparing single-
 * Fixed benchmark resolution
 * Automated benchmark test progression
 * Benchmark progress and configuration interface
-* Per-test average performance reporting
+* Per-test average performance summary
 * Benchmark abort controls
+* Per-frame benchmark sample collection
+* Raw benchmark sample export to timestamped CSV files
+* Benchmark run identification using timestamps
+* Visibility-count stability checking during measurement
+* Benchmark warm-up and configurable measurement sample counts
 
 ## Camera Controls
 | Input       | Action                                         |
@@ -77,17 +82,21 @@ The interface currently provides:
 * Culling time
 * Frame time
 * FPS
+* Culling correctness validation status
+* Benchmark progress and current configuration
+* Benchmark abort control
 
 ### Freecam Mode
 Freecam allows the camera to move freely through the rendered scene using the keyboard and mouse.
 When Freecam is enabled, relative mouse mode is enabled so that the camera can rotate continuously without the cursor being constrained by the edges of the application window.
 
-Note that Freecam has pitch limit of +-89 degrees to stop the camera from fliping over. Yaw is not unlimited.
+Note that Freecam limits pitch to ±89 degrees to prevent the camera from flipping over. Yaw is unrestricted.
 
 ### Static Mode
 Static mode disables Freecam movement and mouse rotation.
 Press `F1` to switch between Static and Freecam modes.
-Static mode will be used for benchamrking.
+
+Automated benchmarks use a fixed deterministic camera configuration independently of the interactive camera mode.
 
 ### Visibility Determination
 The framework currently provides three CPU-side frustum-culling implementations:
@@ -95,7 +104,7 @@ The framework currently provides three CPU-side frustum-culling implementations:
 * **Basic Multithreaded** — divides the scene between multiple worker threads created for each culling operation.
 * **Persistent Multithreaded** — uses a persistent worker pool to avoid repeated thread creation and destruction between frames.
 
-All implementations perform the same world-space AABB against camera-frustum visibility test, allowing their threading strategies to be compared under equivalent scene conditions.
+All implementations use the same world-space AABB against camera-frustum visibility test. This keeps the visibility tests consistent so that the primary experimental variable is the threading strategy.
 
 ### Scene Configuration
 The framework supports configurable scene sizes for evaluating visibility-determination performance under different workloads.
@@ -114,7 +123,6 @@ Scene generation is deterministic to provide repeatable object placement and col
 
 ### Performance Monitoring
 The framework includes a Dear ImGui performance overlay for monitoring the visibility determination system during development.
-Press `F2` to cycle between culling configuration.
 
 The overlay displays:
 * Camera mode
@@ -128,10 +136,40 @@ The overlay displays:
 * Frame processing time
 * Frames per second (FPS)
 
-The culling configuration can be changed at runtime to compare the dedicated single-threaded implementation against the multithreaded implementation at increasing worker thread counts.
+The runtime controls can be used during development to compare the single-threaded, basic multithreaded and persistent-worker implementations across different worker-thread and scene configurations.
 
+## Benchmarking
+
+The framework includes an automated benchmark system for collecting repeatable performance measurements across different visibility-determination configurations.
+
+Each benchmark configuration progresses through three phases:
+
+1. **Validation** — verifies that all culling implementations return the same visible objects.
+2. **Warm-up** — allows the current configuration to execute before measurements are recorded.
+3. **Measurement** — records individual performance samples for later analysis.
+
+Benchmark execution uses a fixed camera configuration and fixed display resolution to keep these conditions consistent between tests. VSync is disabled so that frame presentation does not impose a refresh-rate limit on performance measurements.
+
+For each measured frame, the framework records:
+
+* Test index
+* Sample index
+* Culling implementation
+* Object count
+* Worker-thread count
+* Visible-object count
+* Culling time in milliseconds
+* CPU-side frame processing time in milliseconds
+
+Raw samples are written to timestamped CSV files under:
+
+```text
+results/raw/
+```
+
+```markdown
 ## Technologies Used
-* x86-64 operating system architecure
+* x86-64 architecture
 * C++20
 * Python 3.13
 * CMake
@@ -140,7 +178,9 @@ The culling configuration can be changed at runtime to compare the dedicated sin
 * GLAD 2.0.8
 * GLM
 * Tracy Profiler
-* Dear imgui
+* Dear ImGui
+* Visual Studio 2022
+```
 
 ## Build
 The project uses CMake. CMake automatically downloads project dependancies and manages them using FetchContent. These dependencies include:

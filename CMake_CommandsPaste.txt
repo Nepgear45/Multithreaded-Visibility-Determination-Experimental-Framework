@@ -3,3 +3,6 @@ cmake -S . -B build -DPython_EXECUTABLE="$env:LOCALAPPDATA\Programs\Python\Pytho
 
 Build Debug:
 cmake --build build --config Debug 
+
+Build Release:
+cmake --build build --config Release
