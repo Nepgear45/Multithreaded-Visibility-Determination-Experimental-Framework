@@ -167,7 +167,7 @@ Raw samples are written to timestamped CSV files under:
 results/raw/
 ```
 
-```markdown
+
 ## Technologies Used
 * x86-64 architecture
 * C++20
@@ -180,9 +180,7 @@ results/raw/
 * Tracy Profiler
 * Dear ImGui
 * Visual Studio 2022
-```
 
-## Build
 
 ## Prerequisites
 
@@ -265,6 +263,18 @@ Verify the installation with:
 & "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip show Jinja2
 ```
 
+### Verify Required Tools
+
+Before configuring the project on a new machine, the required tools can be checked with:
+
+```powershell
+cmake --version
+git --version
+python --version
+& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip show Jinja2
+```
+
+
 ## Configure and Build
 
 Open PowerShell and navigate to the project root directory containing `CMakeLists.txt`.
@@ -320,15 +330,4 @@ Then run the configure and Release build commands again:
 ```powershell
 cmake -S . -B build -DPython_EXECUTABLE="$env:LOCALAPPDATA\Programs\Python\Python313\python.exe"
 cmake --build build --config Release
-```
-
-### Verify Required Tools
-
-Before configuring the project on a new machine, the required tools can be checked with:
-
-```powershell
-cmake --version
-git --version
-python --version
-& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip show Jinja2
 ```
