@@ -101,21 +101,77 @@ bool Application::Initialise()
         1
     );
 
+    // Default Window Size
+    int windowWidth = 1280;
+    int windowHeight = 720;
+
+    // Get Primary Display
+    SDL_DisplayID primaryDisplay = SDL_GetPrimaryDisplay();
+
+    if (primaryDisplay != 0)
+    {
+        SDL_Rect usableBounds;
+
+        if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds))
+        {
+            std::cout << "\nScreen Size: " << usableBounds.w << " x " << usableBounds.h << '\n';
+
+            if (usableBounds.w >= 3840 && usableBounds.h >= 2160)
+            {
+                windowWidth = 2560;
+                windowHeight = 1440;
+            }
+            else if (usableBounds.w >= 2560 && usableBounds.h >= 1440)
+            {
+                windowWidth = 1920;
+                windowHeight = 1080;
+            }
+            else if (usableBounds.w >= 1920 && usableBounds.h >= 1080)
+            {
+                windowWidth = 1600;
+                windowHeight = 900;
+            }
+            else if (usableBounds.w >= 1600 && usableBounds.h >= 900)
+            {
+                windowWidth = 1280;
+                windowHeight = 720;
+            }
+            else
+            {
+                windowWidth = static_cast<int>(usableBounds.w * 0.8f);
+                windowHeight = static_cast<int>(usableBounds.h * 0.8f);
+            }
+        }
+        else
+        {
+            std::cerr << "Failed to get display bounds: " << SDL_GetError() << '\n';
+            std::cerr << "Using default window size: 1280 x 720\n";
+        }
+    }
+    else
+    {
+        std::cerr << "Failed to get primary display: " << SDL_GetError() << '\n';
+        std::cerr << "Using default window size: 1280 x 720\n";
+    }
+
     // Create Window
-    m_window = SDL_CreateWindow
-    (
+    m_window = SDL_CreateWindow(
         "Multithreaded Visibility Framework",
-        m_windowWidth,
-        m_windowHeight,
+        windowWidth,
+        windowHeight,
         SDL_WINDOW_OPENGL
     );
 
-    if (m_window == nullptr)
+    if (!m_window)
     {
-        std::cerr << "Window creation failed: " << SDL_GetError() << '\n';
-
-        SDL_Quit();
+        std::cerr << "Failed to create SDL window: " << SDL_GetError() << '\n';
         return false;
+    }
+
+    // Centre Window
+    if (!SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED))
+    {
+        std::cerr << "Failed to centre window: " << SDL_GetError() << '\n';
     }
 
     // Create OpenGL Context

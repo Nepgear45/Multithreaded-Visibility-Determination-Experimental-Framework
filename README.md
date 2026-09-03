@@ -185,59 +185,9 @@ results/raw/
 ## Build
 
 ## Prerequisites
-The following software is required to configure and build the project on Windows.
-
-### 1. Visual Studio 2022
-Install **Visual Studio 2022 Community** or another Visual Studio 2022 edition.
-
-During installation, enable the following workload:
-
-```text
-Desktop development with C++
-```
-
-Make sure the installation includes:
-
-* MSVC C++ build tools
-* Windows 10 or Windows 11 SDK
-* C++ CMake tools for Windows
-
-Visual Studio provides the C and C++ compiler toolchain required by CMake.
-
-### 2. CMake
-Install CMake and make sure it is available from the command line.
-
-Verify the installation with:
-
-```powershell
-cmake --version
-```
-
-### 3. Git
-Git is required because CMake FetchContent downloads project dependencies from Git repositories.
-
-Verify the installation with:
-
-```powershell
-git --version
-```
-
-If Git has just been installed, close and reopen PowerShell or Visual Studio so the updated PATH is detected.
-
-### 4. Python 3.13
-Python 3.13 is required during configuration because GLAD 2.0.8 generates the OpenGL loader source code using Python.
-
-Verify the installation with:
-
-```powershell
-python --version
-```
-
-The project has been developed using Python 3.13.
-
-## Prerequisites
 
 The following software is required to configure and build the project on Windows.
+Note that powershell was used to execute all commands.
 
 ### Visual Studio 2022
 
@@ -254,6 +204,8 @@ Make sure the installation includes:
 * MSVC C++ build tools
 * Windows 10 or Windows 11 SDK
 * C++ CMake tools for Windows
+
+Visual Studio provides the C and C++ compiler toolchain required by CMake.
 
 ### CMake
 
@@ -275,15 +227,27 @@ Verify the installation with:
 git --version
 ```
 
+If Git has just been installed, close and reopen PowerShell or Visual Studio so the updated PATH is detected.
+
 ### Python 3.13
 
-Python 3.13 is required during configuration for GLAD generation.
+Python 3.13 is required during configuration because GLAD generates the OpenGL loader source code using Python.
+
+Python 3.13 can be installed using Windows Package Manager:
+
+```powershell
+winget install -e --id Python.Python.3.13
+```
+
+After installation, close and reopen PowerShell so the updated PATH is detected.
 
 Verify the installation with:
 
 ```powershell
 python --version
 ```
+
+The project has been developed using Python 3.13.
 
 ### Jinja2
 
@@ -345,7 +309,7 @@ Formal benchmark runs should use the Release executable and should be launched w
 
 ### Clean Build
 
-If a configuration fails or the build directory needs to be regenerated, delete it with:
+If configuration fails or the build directory needs to be regenerated, delete it with:
 
 ```powershell
 Remove-Item -Recurse -Force build
@@ -366,5 +330,5 @@ Before configuring the project on a new machine, the required tools can be check
 cmake --version
 git --version
 python --version
-python -m pip show Jinja2
+& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pip show Jinja2
 ```
