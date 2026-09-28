@@ -2,6 +2,22 @@
 An experimental real-time rendering framework developed to investigate the performance impact of **multithreaded CPU-side visibility determination**.
 The framework is being developed as part of a research project comparing single-threaded and multithreaded visibility determination techniques under different scene and threading configurations.
 
+## Demonstration
+
+The framework renders a configurable scene and displays live visibility and
+performance statistics. This example uses persistent multithreading with four
+worker threads and 5,000 objects; 940 are visible in the captured frame.
+
+![Framework running with 5,000 objects](images/framework.png)
+
+## Culling benchmark
+
+The chart compares average culling time at 10,000 objects across three
+processors and several worker-thread counts. Results vary by processor and
+thread count; adding more threads does not always improve performance.
+
+![Average culling time by processor and thread count](images/culling-time-10000-objects.png)
+
 ## Current Features
 * SDL3 window and input handling
 * OpenGL 4.6 Core rendering
